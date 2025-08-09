@@ -243,12 +243,13 @@ class OpenAIChatCompletionsModel(model_generation.MultimodalModel):
       model_options: Mapping[str, Any] | None = None,
       api_options: Mapping[str, Any] | None = None,
       api_key: str | None = None,
+      base_url: str | None = None,
   ):
     super().__init__(
         model_name, model_options=model_options, api_options=api_options
     )
     # If API key is None, defaults to OPENAI_API_KEY in environment.
-    self._client = openai.OpenAI(api_key=api_key)
+    self._client = openai.OpenAI(api_key=api_key, base_url=base_url)
 
   # TODO(google-deepmind): Add error handling.
   def _generate(
@@ -499,12 +500,13 @@ class AnthropicModel(model_generation.Model):
       model_options: Mapping[str, Any] | None = None,
       api_options: Mapping[str, Any] | None = None,
       api_key: str | None = None,
+      base_url: str | None = None,
   ):
     super().__init__(
         model_name, model_options=model_options, api_options=api_options
     )
     # If API key is None, defaults to ANTHROPIC_API_KEY in environment.
-    self._client = anthropic.Anthropic(api_key=api_key)
+    self._client = anthropic.Anthropic(api_key=api_key, base_url=base_url)
 
   def _generate(
       self,

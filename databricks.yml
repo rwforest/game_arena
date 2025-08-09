@@ -1,0 +1,16 @@
+bundle:
+  name: game-arena
+
+artifacts:
+  - path: ./app
+    dest: /
+    type: directory
+
+targets:
+  dev:
+    mode: development
+    resources:
+      da_app:
+        name: game-arena-app
+        path: /
+        port: 8080

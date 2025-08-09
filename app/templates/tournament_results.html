@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Tournament Results</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='jquery.bracket.min.css') }}">
+    <script src="{{ url_for('static', filename='jquery.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='jquery.bracket.min.js') }}"></script>
+</head>
+<body>
+    <h1>Tournament Results</h1>
+    <div id="bracket"></div>
+
+    <script>
+        var tournamentData = {{ data | tojson }};
+
+        $(function() {
+            $('#bracket').bracket({
+                init: tournamentData
+            });
+        });
+    </script>
+</body>
+</html>

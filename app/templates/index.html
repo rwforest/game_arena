@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Game Arena</title>
+</head>
+<body>
+    <h1>Game Arena</h1>
+    <h2>Single Game</h2>
+    <form action="/start_game" method="post">
+        <label for="player1">Player 1 Model:</label>
+        <select name="player1" id="player1">
+            <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+            <option value="gpt-4o">GPT-4o</option>
+            <option value="databricks-dbrx-instruct">DBRX Instruct</option>
+        </select>
+        <br><br>
+        <label for="player2">Player 2 Model:</label>
+        <select name="player2" id="player2">
+            <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+            <option value="gpt-4o" selected>GPT-4o</option>
+            <option value="databricks-dbrx-instruct">DBRX Instruct</option>
+        </select>
+        <br><br>
+        <label for="parser">Parser:</label>
+        <select name="parser" id="parser">
+            <option value="rule_then_soft">Rule-based then Soft-matching</option>
+            <option value="llm_only">LLM-based</option>
+        </select>
+        <br><br>
+        <input type="submit" value="Start Game">
+    </form>
+
+    <hr>
+
+    <h2>Tournament</h2>
+    <form action="/start_tournament" method="post">
+        <label>Select players for the tournament:</label><br>
+        <input type="checkbox" id="player_gemini" name="players" value="gemini-1.5-flash">
+        <label for="player_gemini">Gemini 1.5 Flash</label><br>
+        <input type="checkbox" id="player_gpt" name="players" value="gpt-4o">
+        <label for="player_gpt">GPT-4o</label><br>
+        <input type="checkbox" id="player_dbrx" name="players" value="databricks-dbrx-instruct">
+        <label for="player_dbrx">DBRX Instruct</label><br>
+        <br>
+        <label for="tournament_parser">Parser:</label>
+        <select name="parser" id="tournament_parser">
+            <option value="rule_then_soft">Rule-based then Soft-matching</option>
+            <option value="llm_only">LLM-based</option>
+        </select>
+        <br><br>
+        <input type="submit" value="Start Tournament">
+    </form>
+</body>
+</html>

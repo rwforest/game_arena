@@ -1,0 +1,15 @@
+aiohttp
+anthropic
+chess
+dataclasses-json
+google-genai
+immutabledict
+open_spiel
+openai
+requests
+tenacity
+databricks-sql-connector
+mlflow
+flask
+absl-py
+termcolor
