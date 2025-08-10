@@ -17,9 +17,9 @@ env:
   # Set provider/API keys and Databricks configs in App Settings as needed:
   # - name: OPENAI_API_KEY
   # value: ""
-  # - name: DATABRICKS_TOKEN
-  # value: ""
-  # - name: DATABRICKS_WORKSPACE_URL
-  # value: ""
-  # - name: DATABRICKS_WAREHOUSE_ID
-  # value: ""
+  - name: 'DATABRICKS_TOKEN'
+    value: ''
+  - name: 'DATABRICKS_WORKSPACE_URL'
+    value: 'https://adb-8333330282859393.13.azuredatabricks.net/'
+  - name: 'DATABRICKS_WAREHOUSE_ID'
+    value: 'a54c6569f699db53'

@@ -11,14 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """Model registry for Kaggle Game Arena."""
-
 import enum
-
 from game_arena.harness import model_generation_http
 from game_arena.harness import model_generation_sdk
-
 
 class ModelRegistry(enum.Enum):
   """Model registry for Kaggle Game Arena."""
@@ -36,7 +32,6 @@ class ModelRegistry(enum.Enum):
   QWEN_3_PARALLEL_THREE = "Qwen/Qwen3-235B-A22B-Thinking-2507"
   XAI_GROK_4 = "grok-4-0709"
   # keep-sorted end
-
   def build(self, api_key: str, **kwargs):
     match self:
       case ModelRegistry.ANTHROPIC_CLAUDE_SONNET_4:
@@ -99,6 +94,7 @@ class ModelRegistry(enum.Enum):
           | ModelRegistry.OPENAI_O3
           | ModelRegistry.OPENAI_O4_MINI
       ):
+        # Passes api_options through (e.g., base_url for AI Gateway)
         return model_generation_sdk.OpenAIChatCompletionsModel(
             model_name=self.value,
             api_key=api_key,
