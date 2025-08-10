@@ -1,0 +1,25 @@
+command:
+  - uvicorn
+  - app.server:app
+  - --host
+  - 0.0.0.0
+  - --port
+  - "8000"
+env:
+  - name: 'GA_SQL_CATALOG'
+    value: 'unitygo'
+  - name: 'GA_SQL_SCHEMA'
+    value: 'lichess'
+  - name: 'GA_SQL_TABLE'
+    value: 'game_arena'
+  - name: 'GA_CHESS_OUT_DIR'
+    value: '/Volumes/unitygo/lichess/game_arena/games'
+  # Set provider/API keys and Databricks configs in App Settings as needed:
+  # - name: OPENAI_API_KEY
+  # value: ""
+  # - name: DATABRICKS_TOKEN
+  # value: ""
+  # - name: DATABRICKS_WORKSPACE_URL
+  # value: ""
+  # - name: DATABRICKS_WAREHOUSE_ID
+  # value: ""

@@ -1,3 +1,68 @@
+# Game Arena on Databricks
+
+This repository contains a modified version of the Google DeepMind Game Arena harness, adapted to run on the Databricks platform. It leverages several Databricks features to provide a more robust and scalable environment for running chess games between LLMs.
+
+## Features
+
+- **Databricks Foundation Model API:** The application can use Databricks Foundation Models for playing chess.
+- **Databricks AI Gateway:** External models like GPT-4 and Gemini are routed through the Databricks AI Gateway.
+- **MLflow Tracing:** Each game is logged as an MLflow experiment, with detailed tracing of the agent's chain of thought.
+- **Databricks SQL Logging:** Game results, including PGNs, are logged to a Databricks SQL table for analysis.
+- **Databricks App:** The game arena is hosted as a Databricks App with a web-based UI.
+- **Tournament Mode:** The UI supports setting up and running tournaments between multiple AI players.
+- **Lichess Broadcasting:** Tournaments can be broadcasted live to Lichess.
+
+## Quick Start
+
+### 1. Prepare Your Environment
+
+First, clone the repository and install the required dependencies:
+
+```bash
+git clone https://github.com/google-deepmind/game_arena.git
+cd game_arena
+pip install -r requirements.txt
+```
+
+### 2. Configure Environment Variables
+
+You will need to set the following environment variables to run the application:
+
+```bash
+export DATABRICKS_SERVER_HOSTNAME="your-databricks-hostname"
+export DATABRICKS_HTTP_PATH="your-databricks-sql-warehouse-http-path"
+export DATABRICKS_TOKEN="your-databricks-token"
+export LICHESS_API_TOKEN="your-lichess-api-token"
+export GEMINI_API_KEY="your-gemini-api-key"
+export OPENAI_API_KEY="your-openai-api-key"
+```
+
+### 3. Run the Web UI Locally
+
+To run the web UI on your local machine, execute the following command:
+
+```bash
+python app/main.py
+```
+
+This will start a Flask server on `http://localhost:8080`. You can then open this URL in your browser to access the game arena.
+
+### 4. Deploy to Databricks
+
+To deploy the application as a Databricks App, you will need to have the Databricks CLI installed and configured. Then, you can deploy the app using the following command:
+
+```bash
+databricks bundle deploy -t dev
+```
+
+This will deploy the application to your Databricks workspace. You can then access the app through the URL provided in the output of the command.
+
+## Original README
+
+The original README from the Google DeepMind repository is preserved below for reference.
+
+---
+
 # Game Arena
 
 This GitHub repository contains the harness developed by Google DeepMind for
