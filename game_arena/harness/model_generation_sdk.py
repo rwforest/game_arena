@@ -36,16 +36,13 @@ try:
 except Exception:  # pragma: no cover - optional dependency
   WorkspaceClient = None  # type: ignore
   _HAS_DATABRICKS_SDK = False
-
 _DATBR_WORKSPACE_URL_ENV_KEYS = ("DATABRICKS_WORKSPACE_URL", "DATABRICKS_HOST")
-
 def _normalize_workspace_url(url: str | None) -> str | None:
   if not url:
     return None
   if not url.startswith("http://") and not url.startswith("https://"):
     url = "https://" + url
   return url.rstrip("/")
-
 def _get_workspace_client(host: str | None = None, token: str | None = None):
   """Return a cached WorkspaceClient constructed from env or provided args.
   Uses the following env vars if args are not provided:
@@ -56,15 +53,22 @@ def _get_workspace_client(host: str | None = None, token: str | None = None):
     raise RuntimeError(
         "databricks-sdk is not installed. Please add `databricks-sdk` to requirements."
     )
-  host = _normalize_workspace_url(
-      host or next((os.getenv(k) for k in _DATBR_WORKSPACE_URL_ENV_KEYS if os.getenv(k)), None)  # type: ignore[name-defined]
-  )
-  token = token or os.getenv("DATABRICKS_TOKEN")  # type: ignore[name-defined]
-  # Construct client; SDK will also pick up default profile if available
-  if token:
+  # Resolve host/token from args or environment
+  env_host = next((os.getenv(k) for k in _DATBR_WORKSPACE_URL_ENV_KEYS if os.getenv(k)), None)
+  host = _normalize_workspace_url(host or env_host)
+  token = token or os.getenv("DATABRICKS_TOKEN")
+  # Construct client with the best available information
+  try:
+    if host and token:
+      return WorkspaceClient(host=host, token=token)  # type: ignore[arg-type]
+    if host:
+      return WorkspaceClient(host=host)  # type: ignore[arg-type]
+    if token:
+      return WorkspaceClient(token=token)  # type: ignore[arg-type]
     return WorkspaceClient()
-  return WorkspaceClient()
-
+  except Exception:
+    # As a last resort, try default constructor
+    return WorkspaceClient()
 # --- Existing provider wrappers ---
 _ANTHROPIC_MAX_TOKENS = {
     # Max tokens is a required parameter for the API. Therefore default to the
@@ -101,7 +105,6 @@ _ANTHROPIC_MAX_TOKENS_STREAMING = {
     # keep-sorted end
 }
 _ANTHROPIC_MAX_TOKENS_NON_STREAMING_LIMIT = 21333
-
 class AIStudioModel(model_generation.MultimodalModel):
   """Wrapper for AI Studio model access."""
   def __init__(
@@ -195,7 +198,6 @@ class AIStudioModel(model_generation.MultimodalModel):
         ),
     ]
     return self._generate(contents, model_input.system_instruction)
-
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class _OpenAIChatCompletionsStreamReturn:
   """The return value of _process_openai_chat_completions_stream."""
@@ -204,7 +206,6 @@ class _OpenAIChatCompletionsStreamReturn:
   prompt_tokens: int | None
   reasoning_tokens: int | None
   response_chunks: Sequence[chat_completion_chunk.ChatCompletionChunk]
-
 def _process_openai_chat_completions_stream(
     stream: openai.Stream[chat_completion_chunk.ChatCompletionChunk],
 ) -> _OpenAIChatCompletionsStreamReturn:
@@ -248,7 +249,6 @@ def _process_openai_chat_completions_stream(
       reasoning_tokens=reasoning_tokens,
       response_chunks=response_chunks,
   )
-
 class OpenAIChatCompletionsModel(model_generation.MultimodalModel):
   """Wrapper for OpenAI model access with Chat Completions API."""
   def __init__(
@@ -401,14 +401,12 @@ class OpenAIChatCompletionsModel(model_generation.MultimodalModel):
         },
     })
     return self._generate(content, model_input.system_instruction)
-
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class AnthropicReturn:
   main_response: str
   main_response_and_thoughts: str
   prompt_tokens: int
   generation_tokens: int
-
 def _process_anthropic_stream(
     stream: anthropic.MessageStream,
 ) -> tuple[
@@ -466,7 +464,6 @@ def _process_anthropic_stream(
       ),
       response_chunks,
   )
-
 def _process_anthropic_response(
     response: anthropic_types.Message,
 ) -> AnthropicReturn:
@@ -487,7 +484,6 @@ def _process_anthropic_response(
       prompt_tokens=response.usage.input_tokens,
       generation_tokens=response.usage.output_tokens,
   )
-
 class AnthropicModel(model_generation.Model):
   """Wrapper for Anthropic model access."""
   def __init__(
@@ -621,7 +617,6 @@ class AnthropicModel(model_generation.Model):
         ],
     }]
     return self._generate(messages, model_input.system_instruction)
-
 # --- New: Direct Databricks Serving via SDK ---
 class DatabricksServingModel(model_generation.MultimodalModel):
   """Wrapper that calls Databricks Serving Endpoints via WorkspaceClient.query.
@@ -749,29 +744,87 @@ class DatabricksServingModel(model_generation.MultimodalModel):
       # Last resort
       out = {"response": str(resp)}
     return out
-  def _parse_chat_like_response(self, out: Mapping[str, Any]) -> tuple[str, int | None, int | None, int | None]:
-    # Try OpenAI chat-completions shape first
+  def _parse_chat_like_response(self, out: Mapping[str, Any]) -> tuple[str, str, int | None, int | None, int | None]:
+    # Extract both main text and combined (thoughts + text) when possible.
+    def _extract_main_and_combined(content: Any) -> tuple[str, str]:
+      main_parts: list[str] = []
+      combined_parts: list[str] = []
+      def rec(node: Any):
+        if isinstance(node, str):
+          main_parts.append(node)
+          combined_parts.append(node)
+          return
+        if isinstance(node, list):
+          for el in node:
+            rec(el)
+          return
+        if isinstance(node, dict):
+          t = node.get("type") if isinstance(node.get("type"), str) else None
+          txt = node.get("text") if isinstance(node.get("text"), str) else None
+          # Heuristic: blocks of type reasoning/thinking/thought are considered thoughts only
+          if txt is not None:
+            if t and t.lower() in ("reasoning", "thinking", "thought"):
+              combined_parts.append(txt)
+              # don't add to main_parts to keep main clean
+            else:
+              main_parts.append(txt)
+              combined_parts.append(txt)
+          else:
+            # Recurse into common containers
+            for k in ("content", "message", "parts", "data"):
+              if k in node:
+                rec(node[k])
+          return
+      rec(content)
+      main = "".join(main_parts).strip()
+      combined = "".join(combined_parts).strip()
+      return main, combined
+    def _extract_usage(container: Mapping[str, Any] | None) -> tuple[int | None, int | None, int | None]:
+      if not isinstance(container, dict):
+        return None, None, None
+      ct = container.get("completion_tokens")
+      pt = container.get("prompt_tokens")
+      rt = None
+      det = container.get("completion_tokens_details") if isinstance(container.get("completion_tokens_details"), dict) else None
+      if isinstance(det, dict):
+        rt = det.get("reasoning_tokens")
+      return ct, pt, rt
+    # Try OpenAI chat-completions-like shape
     try:
-      choices = out.get("choices") or out.get("output", {}).get("choices")  # type: ignore[union-attr]
+      choices = out.get("choices") or (out.get("output", {}).get("choices") if isinstance(out.get("output"), dict) else None)  # type: ignore[union-attr]
       if choices and isinstance(choices, (list, tuple)):
-        msg = choices[0].get("message") if isinstance(choices[0], dict) else None
-        if msg and isinstance(msg, dict):
-          content = msg.get("content")
-          if isinstance(content, str):
-            # Usage if present
-            usage = out.get("usage") or out.get("output", {}).get("usage")  # type: ignore[union-attr]
-            ct = usage.get("completion_tokens") if isinstance(usage, dict) else None
-            pt = usage.get("prompt_tokens") if isinstance(usage, dict) else None
-            rt = None
-            if isinstance(usage, dict):
-              det = usage.get("completion_tokens_details")
-              if isinstance(det, dict):
-                rt = det.get("reasoning_tokens")
-            return content, ct, pt, rt
+        first = choices[0] if isinstance(choices[0], dict) else None
+        msg = first.get("message") if isinstance(first, dict) else None
+        if isinstance(msg, dict) and "content" in msg:
+          main, combined = _extract_main_and_combined(msg.get("content"))
+          if main or combined:
+            usage_container = out.get("usage") or (out.get("output", {}).get("usage") if isinstance(out.get("output"), dict) else None)  # type: ignore[union-attr]
+            ct, pt, rt = _extract_usage(usage_container if isinstance(usage_container, dict) else None)
+            if not combined:
+              combined = main
+            return main, combined, ct, pt, rt
     except Exception:
       pass
-    # Try generic MLflow/serving output shapes
-    # e.g. {"predictions": [{"candidates": [{"text": "..."}]}]}
+    # Databricks responses API shape: output.message.content (list of blocks)
+    try:
+      output_obj = out.get("output") if isinstance(out, dict) else None
+      if isinstance(output_obj, dict):
+        msg = output_obj.get("message")
+        if isinstance(msg, dict):
+          main, combined = _extract_main_and_combined(msg.get("content"))
+          if main or combined:
+            usage_container = out.get("usage") or output_obj.get("usage")
+            ct, pt, rt = _extract_usage(usage_container if isinstance(usage_container, dict) else None)
+            if not combined:
+              combined = main
+            return main, combined, ct, pt, rt
+        # Some endpoints place text in output.text directly
+        out_text = output_obj.get("text")
+        if isinstance(out_text, str) and out_text:
+          return out_text, out_text, None, None, None
+    except Exception:
+      pass
+    # Generic MLflow/serving output shapes
     preds = out.get("predictions") if isinstance(out, dict) else None
     if isinstance(preds, list) and preds:
       cand = None
@@ -782,30 +835,40 @@ class DatabricksServingModel(model_generation.MultimodalModel):
           cand = cands[0]
       if isinstance(cand, dict):
         text = cand.get("text") or cand.get("content") or cand.get("message")
-        if isinstance(text, str):
-          return text, None, None, None
-    # Fallback: try common single-field
-    for key in ("output_text", "text", "content", "result"):
+        main, combined = _extract_main_and_combined(text)
+        if main or combined:
+          if not combined:
+            combined = main
+          return main, combined, None, None, None
+    # Fallbacks: single-field
+    for key in ("output_text", "text", "content", "result", "reply"):
       v = out.get(key) if isinstance(out, dict) else None
-      if isinstance(v, str):
-        return v, None, None, None
-    # If everything fails, stringify
-    return str(out), None, None, None
+      if isinstance(v, str) and v:
+        return v, v, None, None, None
+      if isinstance(v, dict) or isinstance(v, list):
+        main, combined = _extract_main_and_combined(v)
+        if main or combined:
+          if not combined:
+            combined = main
+          return main, combined, None, None, None
+    # Last resort: stringify
+    s = str(out)
+    return s, s, None, None, None
   def generate_with_text_input(self, model_input: tournament_util.ModelTextInput) -> tournament_util.GenerateReturn:
     messages = self._build_messages(
         user_content=model_input.prompt_text,
         system_instruction=model_input.system_instruction,
     )
     out = self._query_chat(messages)
-    content, gen_toks, prompt_toks, reasoning_toks = self._parse_chat_like_response(out)
+    main_text, combined_text, gen_toks, prompt_toks, reasoning_toks = self._parse_chat_like_response(out)
     request_for_logging = {
         "endpoint": self._model_name,
         "messages": messages,
         "model_options": self._model_options,
     }
     return tournament_util.GenerateReturn(
-        main_response=content or "",
-        main_response_and_thoughts="",
+        main_response=main_text or "",
+        main_response_and_thoughts=combined_text or main_text or "",
         request_for_logging=request_for_logging,
         response_for_logging=out,  # raw dict from SDK response
         generation_tokens=gen_toks,
@@ -828,15 +891,15 @@ class DatabricksServingModel(model_generation.MultimodalModel):
         system_instruction=model_input.system_instruction,
     )
     out = self._query_chat(messages)
-    content, gen_toks, prompt_toks, reasoning_toks = self._parse_chat_like_response(out)
+    main_text, combined_text, gen_toks, prompt_toks, reasoning_toks = self._parse_chat_like_response(out)
     request_for_logging = {
         "endpoint": self._model_name,
         "messages": messages,
         "model_options": self._model_options,
     }
     return tournament_util.GenerateReturn(
-        main_response=content or "",
-        main_response_and_thoughts="",
+        main_response=main_text or "",
+        main_response_and_thoughts=combined_text or main_text or "",
         request_for_logging=request_for_logging,
         response_for_logging=out,
         generation_tokens=gen_toks,
