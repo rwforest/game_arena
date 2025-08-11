@@ -18,12 +18,8 @@ from app.chess_logging import ChessRecorder
 from app import db_sql
 import requests
 # Optional MLflow GenAI Tracing (no-op if not available)
-try:
-    from mlflow.tracing import start_trace, start_span
-    _HAS_TRACING = True
-except Exception:
-    start_trace = start_span = None
-    _HAS_TRACING = False
+# Removed advanced client API (start_trace/start_span) and feature gates.
+# We will use the high-level decorator API: @mlflow.trace
 app = FastAPI(title="game_arena API", version="0.1.4")
 class GenerateRequest(BaseModel):
     provider: Literal["databricks", "openai", "gemini", "anthropic", "together", "xai"] = "databricks"
@@ -34,7 +30,6 @@ class GenerateRequest(BaseModel):
     stream: Optional[bool] = False
     timeout: Optional[int] = 600
     base_url: Optional[str] = None  # for AI Gateway per-request override
-
 def _build_model(req: 'GenerateRequest'):
     # Prefer Databricks Serving via SDK by default
     opts: Dict[str, Any] = {"temperature": req.temperature, "max_output_tokens": req.max_tokens}
@@ -97,53 +92,105 @@ def _build_model(req: 'GenerateRequest'):
             model_name=req.model_name, model_options=opts, api_options=api
         )
     raise ValueError(f"Unsupported provider {req.provider}")
+# --- High-level tracing helpers using decorator API ---
+@mlflow.trace(name="llm_generate", span_type="llm")
+def _llm_generate(model: Any, prompt_text: str, player: Optional[str] = None) -> Dict[str, Any]:
+    mi = tournament_util.ModelTextInput(prompt_text=prompt_text)
+    ret = model.generate_with_text_input(mi)
+    out: Dict[str, Any] = {
+        "text": ret.main_response,
+        "usage": {
+            "prompt_tokens": ret.prompt_tokens,
+            "generation_tokens": ret.generation_tokens,
+            "reasoning_tokens": getattr(ret, "reasoning_tokens", None),
+        },
+        "request_for_logging": getattr(ret, "request_for_logging", None),
+        "response_for_logging": getattr(ret, "response_for_logging", None),
+        "player": player,
+    }
+    # Always capture chain-of-thought if provided by the model
+    if hasattr(ret, "main_response_and_thoughts"):
+        out["chain_of_thought"] = ret.main_response_and_thoughts
+    return out
+@mlflow.trace(name="app_generate", span_type="chain")
+def _trace_generate(req: 'GenerateRequest') -> Dict[str, Any]:
+    model = _build_model(req)
+    llm_out = _llm_generate(model, req.prompt, player=None)
+    return {
+        "text": llm_out["text"],
+        "usage": llm_out["usage"],
+        "provider": req.provider,
+        "model_name": req.model_name,
+    }
+@mlflow.trace(name="generate_prompt", span_type="chain")
+def _generate_chess_prompt(state: Any) -> Dict[str, Any]:
+    prompt_gen = prompt_generation.PromptGeneratorText()
+    prompt_template = prompts.PromptTemplate.NO_LEGAL_ACTIONS
+    subs = {
+        "readable_state_str": tournament_util.convert_to_readable_state(
+            game_short_name="chess",
+            state_str=state.to_string(),
+            current_player=state.current_player(),
+        ),
+        "move_history": (tournament_util.get_action_string_history(state) or "None"),
+        "player_name": game_notation_examples.GAME_SPECIFIC_NOTATIONS["chess"]["player_map"][state.current_player()],
+        "move_notation": game_notation_examples.GAME_SPECIFIC_NOTATIONS["chess"]["move_notation"],
+        "notation": game_notation_examples.GAME_SPECIFIC_NOTATIONS["chess"]["state_notation"],
+    }
+    prompt = prompt_gen.generate_prompt_with_text_only(
+        prompt_template=prompt_template, game_short_name="chess", **subs
+    )
+    return {"prompt_text": prompt.prompt_text}
+@mlflow.trace(name="parse_move", span_type="tool")
+def _parse_move_span(text_to_parse: str, state: Any) -> Dict[str, Any]:
+    parser = parsers.ChainedMoveParser([parsers.RuleBasedMoveParser(), parsers.SoftMoveParser("chess")])
+    pin = parsers.TextParserInput(
+        text=text_to_parse,
+        state_str=state.to_string(),
+        legal_moves=parsers.get_legal_action_strings(state),
+        player_number=state.current_player(),
+    )
+    move = parser.parse(pin)
+    return {"parsed_move": move, "is_valid": bool(move)}
+@mlflow.trace(name="chess_game", span_type="chain")
+def _run_chess_game(num_moves: int, model_white: Any, model_black: Any, run_id: Optional[str]) -> Dict[str, Any]:
+    game = pyspiel.load_game("chess")
+    state = game.new_initial_state()
+    rec = ChessRecorder(headers={"Event": "game_arena", "Site": "Databricks App", "Run": str(run_id) if run_id else ""}, write_files=False)
+    for move_number in range(num_moves):
+        if state.is_terminal():
+            break
+        # Generate prompt
+        gp = _generate_chess_prompt(state)
+        prompt_text = gp["prompt_text"]
+        # Pick model
+        model = model_white if state.current_player() == 0 else model_black
+        player = "white" if state.current_player() == 0 else "black"
+        # Model call
+        llm_out = _llm_generate(model, prompt_text, player=player)
+        # Parse
+        parsed = _parse_move_span(llm_out["text"], state)
+        move = parsed.get("parsed_move")
+        if not move:
+            break
+        # Apply
+        rec.push_san(move)
+        state.apply_action(state.string_to_action(move))
+    pgn_game = tournament_util.get_pgn(state)
+    pgn_str = str(pgn_game)
+    result = pgn_game.headers.get("Result", "*")
+    out_paths = rec.finalize(result_str=result)
+    return {"pgn": pgn_str, "result": result, "artifacts": out_paths}
 @app.get("/health")
 def health():
     return {"status": "ok"}
 @app.post("/generate")
 def generate(req: GenerateRequest):
-    mi = tournament_util.ModelTextInput(prompt_text=req.prompt)
-    trace_cm = start_trace("game_arena_app_call") if _HAS_TRACING else None
+    # ...existing code...
     try:
-        if trace_cm:
-            trace_ctx = trace_cm.__enter__()
-        # per-request span
-        span_cm = start_span(f"{req.provider}.generate") if _HAS_TRACING else None
-        try:
-            if span_cm:
-                span = span_cm.__enter__()
-                if hasattr(span, "set_inputs"):
-                    span.set_inputs({"prompt": req.prompt, "provider": req.provider, "model_name": req.model_name})
-            model = _build_model(req)
-            ret = model.generate_with_text_input(mi)
-            out: Dict[str, Any] = {
-                "text": ret.main_response,
-                "usage": {
-                    "prompt_tokens": ret.prompt_tokens,
-                    "generation_tokens": ret.generation_tokens,
-                    "reasoning_tokens": getattr(ret, "reasoning_tokens", None),
-                },
-                "provider": req.provider,
-                "model_name": req.model_name,
-            }
-            if span_cm and hasattr(span, "set_outputs"):
-                span.set_outputs({
-                    "text": ret.main_response,
-                    # Thoughts are redacted by default. Only log if approved.
-                    "request": ret.request_for_logging,
-                    "response": ret.response_for_logging,
-                    "usage": out["usage"],
-                })
-            return out
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
-        finally:
-            if span_cm:
-                span_cm.__exit__(None, None, None)
-    finally:
-        if trace_cm:
-            trace_cm.__exit__(None, None, None)
-
+        return _trace_generate(req)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 class PlayerConfig(BaseModel):
     provider: Literal["databricks", "openai", "gemini", "anthropic", "together", "xai"]
     model_name: str
@@ -151,13 +198,10 @@ class PlayerConfig(BaseModel):
     max_tokens: Optional[int] = 1024
     timeout: Optional[int] = 600
     base_url: Optional[str] = None  # if set, route via Gateway with OpenAI wrapper
-
 class ChessGameRequest(BaseModel):
     num_moves: int = 6
     player_white: PlayerConfig
     player_black: PlayerConfig
-    log_thoughts: bool = False  # default redact
-
 @app.post("/game/chess/start")
 def start_chess_game(req: ChessGameRequest):
     # Ensure SQL table exists (no-op if connector not installed)
@@ -170,13 +214,12 @@ def start_chess_game(req: ChessGameRequest):
     # Unique experiment per game + run
     game_id = str(uuid.uuid4())
     exp_name = f"game_arena"
-
     mlflow.set_tracking_uri("databricks")
     
     # Dynamically determine the experiment path under the current user's folder
     try:
         # This requires the databricks-sdk to be installed and auth to be configured.
-        from databricks.sdk import WorkspaceClient
+        from databricks.sdk import WorkspaceClient  # type: ignore[import-not-found]
         w = WorkspaceClient()
         username = w.current_user.me().user_name
         experiment_name = f"/Users/{username}/{exp_name}"
@@ -184,9 +227,14 @@ def start_chess_game(req: ChessGameRequest):
         # Fallback to a shared directory if user cannot be determined.
         print(f"Could not determine username, falling back to shared experiment path. Error: {e}")
         experiment_name = f"/Shared/game_arena_games/{exp_name}"
-
     mlflow.set_experiment(experiment_name)
-
+    # Ensure experiment is public (readable by all users)
+    try:
+        exp = mlflow.get_experiment_by_name(experiment_name)
+        if exp and exp.experiment_id:
+            _set_experiment_public(exp.experiment_id)
+    except Exception:
+        pass
     # Optionally fetch available routes to default the players
     routes = _fetch_gateway_routes()
     route_w = routes[0] if len(routes) > 0 else None
@@ -208,110 +256,14 @@ def start_chess_game(req: ChessGameRequest):
             })
         except Exception:
             pass
-        # Set up game and helpers
-        game = pyspiel.load_game("chess")
-        state = game.new_initial_state()
-        prompt_gen = prompt_generation.PromptGeneratorText()
-        prompt_template = prompts.PromptTemplate.NO_LEGAL_ACTIONS
-        parser = parsers.ChainedMoveParser([parsers.RuleBasedMoveParser(), parsers.SoftMoveParser("chess")])
-        # Build models for both players
+        # Set up models for both players
         model_white = _build_model_from_player_config(req.player_white, route_w)
         model_black = _build_model_from_player_config(req.player_black, route_b)
-        # Recorder for PGN
-        rec = ChessRecorder(headers={"Event": "game_arena", "Site": "Databricks App", "Run": str(run_id) if run_id else ""}, write_files=False)
-        
-        # Top-level trace for the entire game
-        with start_trace("chess_game") if _HAS_TRACING else _nullcontext():  # type: ignore
-            for move_number in range(req.num_moves):
-                if state.is_terminal():
-                    break
-                
-                # Parent span for all operations within a single move
-                with start_span(f"move_{move_number + 1}", inputs={"move_number": move_number}) if _HAS_TRACING else _nullcontext() as move_span:
-                    # 1. Generate Prompt
-                    with start_span("1.generate_prompt") if _HAS_TRACING else _nullcontext() as prompt_span:
-                        subs = {
-                            "readable_state_str": tournament_util.convert_to_readable_state(
-                                game_short_name="chess",
-                                state_str=state.to_string(),
-                                current_player=state.current_player(),
-                            ),
-                            "move_history": (tournament_util.get_action_string_history(state) or "None"),
-                            "player_name": game_notation_examples.GAME_SPECIFIC_NOTATIONS["chess"]["player_map"][state.current_player()],
-                            "move_notation": game_notation_examples.GAME_SPECIFIC_NOTATIONS["chess"]["move_notation"],
-                            "notation": game_notation_examples.GAME_SPECIFIC_NOTATIONS["chess"]["state_notation"],
-                        }
-                        prompt = prompt_gen.generate_prompt_with_text_only(
-                            prompt_template=prompt_template, game_short_name="chess", **subs
-                        )
-                        mi = tournament_util.ModelTextInput(prompt_text=prompt.prompt_text)
-                        if _HAS_TRACING and prompt_span:
-                            prompt_span.set_outputs({"prompt": mi.prompt_text})
-
-                    # Pick model per side
-                    model = model_white if state.current_player() == 0 else model_black
-
-                    # 2. Call Model
-                    with start_span("2.model_generate") if _HAS_TRACING else _nullcontext() as model_span:
-                        if _HAS_TRACING and model_span:
-                            model_span.set_inputs({
-                                "player": "white" if state.current_player() == 0 else "black",
-                                "prompt": mi.prompt_text,
-                            })
-                        
-                        ret = model.generate_with_text_input(mi)
-
-                        if _HAS_TRACING and model_span:
-                            outputs = {
-                                "text": ret.main_response,
-                                "usage": {
-                                    "prompt_tokens": ret.prompt_tokens,
-                                    "generation_tokens": ret.generation_tokens,
-                                    "reasoning_tokens": getattr(ret, "reasoning_tokens", None),
-                                },
-                                "request_for_logging": ret.request_for_logging,
-                                "response_for_logging": ret.response_for_logging,
-                            }
-                            if req.log_thoughts:
-                                outputs["chain_of_thought"] = ret.main_response_and_thoughts
-                            model_span.set_outputs(outputs)
-
-                    # 3. Parse Model Response
-                    with start_span("3.parse_move") if _HAS_TRACING else _nullcontext() as parse_span:
-                        pin = parsers.TextParserInput(
-                            text=ret.main_response,
-                            state_str=state.to_string(),
-                            legal_moves=parsers.get_legal_action_strings(state),
-                            player_number=state.current_player(),
-                        )
-                        if _HAS_TRACING and parse_span:
-                            parse_span.set_inputs({
-                                "text_to_parse": pin.text,
-                                "legal_moves": pin.legal_moves,
-                            })
-                        
-                        move = parser.parse(pin)
-
-                        if _HAS_TRACING and parse_span:
-                            parse_span.set_outputs({"parsed_move": move, "is_valid": move is not None})
-                    
-                    if not move:
-                        if _HAS_TRACING and move_span:
-                            move_span.add_event("Parsing failed, game terminated.")
-                        break
-                    
-                    # Record and apply move
-                    rec.push_san(move)
-                    state.apply_action(state.string_to_action(move))
-
-        # Finalize PGN
-        pgn_game = tournament_util.get_pgn(state)
-        pgn_str = str(pgn_game)
-        result = pgn_game.headers.get("Result", "*")
-        out_paths = rec.finalize(result_str=result)
+        # Execute traced chess game loop
+        game_out = _run_chess_game(req.num_moves, model_white, model_black, run_id)
         # Attach to MLflow run
         try:
-            mlflow.log_text(pgn_str, "game.pgn")
+            mlflow.log_text(game_out.get("pgn", ""), "game.pgn")
         except Exception:
             pass
         # Insert to SQL table if connector available
@@ -328,8 +280,8 @@ def start_chess_game(req: ChessGameRequest):
                 black="Black",
                 model_white=req.player_white.model_name,
                 model_black=req.player_black.model_name,
-                result=result,
-                pgn=pgn_str,
+                result=game_out.get("result"),
+                pgn=game_out.get("pgn"),
             )
         except Exception:
             pass
@@ -337,16 +289,15 @@ def start_chess_game(req: ChessGameRequest):
             "experiment_name": experiment_name,
             "experiment_id": str(experiment_id) if experiment_id else None,
             "run_id": run_id,
-            "result": result,
-            "pgn": pgn_str,
-            "artifacts": out_paths,
+            "result": game_out.get("result"),
+            "pgn": game_out.get("pgn"),
+            "artifacts": game_out.get("artifacts"),
         }
     finally:
         try:
             mlflow.end_run()
         except Exception:
             pass
-
 def _build_model_from_player_config(pc: PlayerConfig, default_route: Optional[dict]):
     """Helper to build a model from a PlayerConfig object."""
     # For databricks provider always use SDK; pick endpoint by name or from default route
@@ -380,7 +331,27 @@ def _build_model_from_player_config(pc: PlayerConfig, default_route: Optional[di
         base_url=base_url,
     )
     return _build_model(greq)
-
+def _set_experiment_public(experiment_id: str) -> None:
+    """Grant All Users read access to the MLflow experiment on Databricks.
+    Best-effort, no-op outside Databricks or on failure.
+    """
+    ws = _workspace_url()
+    if not ws or not experiment_id:
+        return
+    headers = _auth_headers() | {"Content-Type": "application/json"}
+    url = f"{ws}/api/2.0/permissions/experiments/{experiment_id}"
+    payload = {
+        "access_control_list": [
+            {"group_name": "users", "permission_level": "CAN_READ"}
+        ]
+    }
+    try:
+        r = requests.patch(url, headers=headers, json=payload, timeout=10)
+        if not r.ok:
+            # Fallback to PUT (replace) if PATCH not supported
+            requests.put(url, headers=headers, json=payload, timeout=10)
+    except Exception:
+        pass
 # --- Databricks discovery helpers ---
 def _workspace_url() -> Optional[str]:
     ws = os.environ.get("DATABRICKS_WORKSPACE_URL")
@@ -392,11 +363,9 @@ def _workspace_url() -> Optional[str]:
             host = "https://" + host
         return host.rstrip("/")
     return None
-
 def _auth_headers() -> Dict[str, str]:
     token = os.environ.get("DATABRICKS_TOKEN")
     return {"Authorization": f"Bearer {token}"} if token else {}
-
 def _fetch_routes_via_sdk() -> list[dict]:
     """Discover AI Gateway routes and Serving Endpoints using databricks-sdk.
     Returns a list of {name, provider?, model?, base_url} entries suitable for UI/model selection.
@@ -479,7 +448,6 @@ def _fetch_routes_via_sdk() -> list[dict]:
         # SDK may not be installed or env not configured
         return []
     return routes
-
 def _fetch_gateway_routes() -> list[dict]:
     """Fetch available routes/endpoints using SDK first, then REST fallback."""
     routes = _fetch_routes_via_sdk()
@@ -522,11 +490,9 @@ def _fetch_gateway_routes() -> list[dict]:
     except Exception:
         pass
     return out
-
 def _get_default_gateway_route() -> Optional[dict]:
     routes = _fetch_gateway_routes()
     return routes[0] if routes else None
-
 @app.get("/", response_class=HTMLResponse)
 def index():
     return """
@@ -591,10 +557,6 @@ def index():
             <div class="col">
               <label>Moves</label>
               <input type="number" id="cg_moves" value="6" />
-            </div>
-            <div class="col">
-              <label>Log chain-of-thought</label>
-              <input type="checkbox" id="cg_thoughts" />
             </div>
           </div>
           <div class="row">
@@ -663,11 +625,16 @@ def index():
             const opt = document.createElement('option');
             opt.value = it.name || it.model || '';
             opt.textContent = it.name || it.model || '';
+            // Attach metadata so we can route correctly per-selection
+            if (it.base_url) opt.dataset.baseUrl = it.base_url;
+            if (it.provider) opt.dataset.provider = it.provider;
             sel.appendChild(opt);
           }
         }
         async function init() {
           const routes = await fetchRoutes();
+          // Keep for lookup if needed later
+          window.__routes = routes;
           const genModel = document.getElementById('gen_model');
           const wModel = document.getElementById('w_model');
           const bModel = document.getElementById('b_model');
@@ -676,36 +643,54 @@ def index():
           fillSelect(bModel, routes);
         }
         document.getElementById('btn_generate').addEventListener('click', async () => {
+          const provider = document.getElementById('gen_provider').value;
+          const sel = document.getElementById('gen_model');
+          const selectedOpt = sel.options[sel.selectedIndex];
+          const baseUrl = selectedOpt && selectedOpt.dataset ? selectedOpt.dataset.baseUrl : undefined;
           const body = {
-            provider: document.getElementById('gen_provider').value,
-            model_name: document.getElementById('gen_model').value,
+            provider,
+            model_name: sel.value,
             prompt: document.getElementById('gen_prompt').value,
             temperature: parseFloat(document.getElementById('gen_temp').value),
             max_tokens: parseInt(document.getElementById('gen_max').value, 10),
             stream: false,
             timeout: 600
           };
+          // For non-Databricks providers, use the selected route base_url to go through Gateway/OpenAI
+          if (provider !== 'databricks' && baseUrl) {
+            body.base_url = baseUrl;
+          }
           const r = await fetch('/generate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
           const out = document.getElementById('gen_output');
           out.textContent = r.ok ? JSON.stringify(await r.json(), null, 2) : (await r.text());
         });
         document.getElementById('btn_start').addEventListener('click', async () => {
+          const wProv = document.getElementById('w_provider').value;
+          const wSel = document.getElementById('w_model');
+          const wOpt = wSel.options[wSel.selectedIndex];
+          const wBase = wOpt && wOpt.dataset ? wOpt.dataset.baseUrl : undefined;
+          const bProv = document.getElementById('b_provider').value;
+          const bSel = document.getElementById('b_model');
+          const bOpt = bSel.options[bSel.selectedIndex];
+          const bBase = bOpt && bOpt.dataset ? bOpt.dataset.baseUrl : undefined;
           const body = {
             num_moves: parseInt(document.getElementById('cg_moves').value, 10),
-            log_thoughts: document.getElementById('cg_thoughts').checked,
             player_white: {
-              provider: document.getElementById('w_provider').value,
-              model_name: document.getElementById('w_model').value,
+              provider: wProv,
+              model_name: wSel.value,
               temperature: parseFloat(document.getElementById('w_temp').value),
               max_tokens: parseInt(document.getElementById('w_max').value, 10),
             },
             player_black: {
-              provider: document.getElementById('b_provider').value,
-              model_name: document.getElementById('b_model').value,
+              provider: bProv,
+              model_name: bSel.value,
               temperature: parseFloat(document.getElementById('b_temp').value),
               max_tokens: parseInt(document.getElementById('b_max').value, 10),
             }
           };
+          // Include base_url when not using Databricks provider so backend routes to the selected endpoint
+          if (wProv !== 'databricks' && wBase) body.player_white.base_url = wBase;
+          if (bProv !== 'databricks' && bBase) body.player_black.base_url = bBase;
           const r = await fetch('/game/chess/start', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
           const out = document.getElementById('cg_output');
           out.textContent = r.ok ? JSON.stringify(await r.json(), null, 2) : (await r.text());
@@ -715,7 +700,6 @@ def index():
     </body>
     </html>
     """
-
 @app.get("/routes")
 def routes():
     return {"routes": _fetch_gateway_routes()}
