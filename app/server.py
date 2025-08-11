@@ -165,10 +165,28 @@ def start_chess_game(req: ChessGameRequest):
         db_sql.init_table()
     except Exception:
         pass
+    mlflow.openai.autolog()
+    
     # Unique experiment per game + run
     game_id = str(uuid.uuid4())
-    exp_name = f"game_arena_game_{game_id}"
-    mlflow.set_experiment(exp_name)
+    exp_name = f"game_arena"
+
+    mlflow.set_tracking_uri("databricks")
+    
+    # Dynamically determine the experiment path under the current user's folder
+    try:
+        # This requires the databricks-sdk to be installed and auth to be configured.
+        from databricks.sdk import WorkspaceClient
+        w = WorkspaceClient()
+        username = w.current_user.me().user_name
+        experiment_name = f"/Users/{username}/{exp_name}"
+    except Exception as e:
+        # Fallback to a shared directory if user cannot be determined.
+        print(f"Could not determine username, falling back to shared experiment path. Error: {e}")
+        experiment_name = f"/Shared/game_arena_games/{exp_name}"
+
+    mlflow.set_experiment(experiment_name)
+
     # Optionally fetch available routes to default the players
     routes = _fetch_gateway_routes()
     route_w = routes[0] if len(routes) > 0 else None
@@ -196,108 +214,96 @@ def start_chess_game(req: ChessGameRequest):
         prompt_gen = prompt_generation.PromptGeneratorText()
         prompt_template = prompts.PromptTemplate.NO_LEGAL_ACTIONS
         parser = parsers.ChainedMoveParser([parsers.RuleBasedMoveParser(), parsers.SoftMoveParser("chess")])
-        # Build models for both players with native or Gateway/SDK based on provider/base_url/env
-        def build_from_player(pc: PlayerConfig, default_route: Optional[dict]):
-            # For databricks provider always use SDK; pick endpoint by name or from default route
-            if pc.provider == "databricks":
-                endpoint_name = pc.model_name
-                if (not endpoint_name or endpoint_name.lower() == "auto") and default_route:
-                    endpoint_name = default_route.get("name") or default_route.get("id")
-                greq = GenerateRequest(
-                    provider="databricks",
-                    model_name=endpoint_name or "",
-                    prompt="",  # unused placeholder
-                    temperature=pc.temperature,
-                    max_tokens=pc.max_tokens,
-                    stream=False,
-                    timeout=pc.timeout,
-                )
-                return _build_model(greq)
-            base_url = pc.base_url or (default_route.get("base_url") if default_route else None)
-            model_name = pc.model_name
-            if (not model_name or model_name.lower() == "auto") and default_route:
-                # For non-databricks providers prefer the model id if present
-                model_name = default_route.get("model") or default_route.get("name") or model_name
-            greq = GenerateRequest(
-                provider=pc.provider,
-                model_name=model_name,
-                prompt="",  # unused placeholder
-                temperature=pc.temperature,
-                max_tokens=pc.max_tokens,
-                stream=False,
-                timeout=pc.timeout,
-                base_url=base_url,
-            )
-            return _build_model(greq)
-        model_white = build_from_player(req.player_white, route_w)
-        model_black = build_from_player(req.player_black, route_b)
+        # Build models for both players
+        model_white = _build_model_from_player_config(req.player_white, route_w)
+        model_black = _build_model_from_player_config(req.player_black, route_b)
         # Recorder for PGN
         rec = ChessRecorder(headers={"Event": "game_arena", "Site": "Databricks App", "Run": str(run_id) if run_id else ""}, write_files=False)
+        
+        # Top-level trace for the entire game
         with start_trace("chess_game") if _HAS_TRACING else _nullcontext():  # type: ignore
             for move_number in range(req.num_moves):
                 if state.is_terminal():
                     break
-                # Build prompt
-                subs = {
-                    "readable_state_str": tournament_util.convert_to_readable_state(
-                        game_short_name="chess",
-                        state_str=state.to_string(),
-                        current_player=state.current_player(),
-                    ),
-                    "move_history": (tournament_util.get_action_string_history(state) or "None"),
-                    "player_name": game_notation_examples.GAME_SPECIFIC_NOTATIONS["chess"][
-                        "player_map"
-                    ][state.current_player()],
-                    "move_notation": game_notation_examples.GAME_SPECIFIC_NOTATIONS["chess"][
-                        "move_notation"
-                    ],
-                    "notation": game_notation_examples.GAME_SPECIFIC_NOTATIONS["chess"][
-                        "state_notation"
-                    ],
-                }
-                prompt = prompt_gen.generate_prompt_with_text_only(
-                    prompt_template=prompt_template, game_short_name="chess", **subs
-                )
-                mi = tournament_util.ModelTextInput(prompt_text=prompt.prompt_text)
-                # Pick model per side
-                model = model_white if state.current_player() == 0 else model_black
-                # Span for model call
-                span_cm = start_span("model.generate") if _HAS_TRACING else _nullcontext()
-                try:
-                    span = span_cm.__enter__()
-                    if hasattr(span, "set_inputs"):
-                        span.set_inputs({
-                            "player": state.current_player(),
-                            "prompt": mi.prompt_text,
-                        })
-                    ret = model.generate_with_text_input(mi)
-                    if hasattr(span, "set_outputs"):
-                        outputs = {
-                            "text": ret.main_response,
-                            "request": ret.request_for_logging,
-                            "response": ret.response_for_logging,
-                            "prompt_tokens": ret.prompt_tokens,
-                            "generation_tokens": ret.generation_tokens,
-                            "reasoning_tokens": getattr(ret, "reasoning_tokens", None),
+                
+                # Parent span for all operations within a single move
+                with start_span(f"move_{move_number + 1}", inputs={"move_number": move_number}) if _HAS_TRACING else _nullcontext() as move_span:
+                    # 1. Generate Prompt
+                    with start_span("1.generate_prompt") if _HAS_TRACING else _nullcontext() as prompt_span:
+                        subs = {
+                            "readable_state_str": tournament_util.convert_to_readable_state(
+                                game_short_name="chess",
+                                state_str=state.to_string(),
+                                current_player=state.current_player(),
+                            ),
+                            "move_history": (tournament_util.get_action_string_history(state) or "None"),
+                            "player_name": game_notation_examples.GAME_SPECIFIC_NOTATIONS["chess"]["player_map"][state.current_player()],
+                            "move_notation": game_notation_examples.GAME_SPECIFIC_NOTATIONS["chess"]["move_notation"],
+                            "notation": game_notation_examples.GAME_SPECIFIC_NOTATIONS["chess"]["state_notation"],
                         }
-                        if req.log_thoughts:
-                            outputs["chain_of_thought"] = ret.main_response_and_thoughts
-                        span.set_outputs(outputs)
-                finally:
-                    span_cm.__exit__(None, None, None)
-                # Parse
-                pin = parsers.TextParserInput(
-                    text=ret.main_response,
-                    state_str=state.to_string(),
-                    legal_moves=parsers.get_legal_action_strings(state),
-                    player_number=state.current_player(),
-                )
-                move = parser.parse(pin)
-                if not move:
-                    break
-                # Record and apply move
-                rec.push_san(move)
-                state.apply_action(state.string_to_action(move))
+                        prompt = prompt_gen.generate_prompt_with_text_only(
+                            prompt_template=prompt_template, game_short_name="chess", **subs
+                        )
+                        mi = tournament_util.ModelTextInput(prompt_text=prompt.prompt_text)
+                        if _HAS_TRACING and prompt_span:
+                            prompt_span.set_outputs({"prompt": mi.prompt_text})
+
+                    # Pick model per side
+                    model = model_white if state.current_player() == 0 else model_black
+
+                    # 2. Call Model
+                    with start_span("2.model_generate") if _HAS_TRACING else _nullcontext() as model_span:
+                        if _HAS_TRACING and model_span:
+                            model_span.set_inputs({
+                                "player": "white" if state.current_player() == 0 else "black",
+                                "prompt": mi.prompt_text,
+                            })
+                        
+                        ret = model.generate_with_text_input(mi)
+
+                        if _HAS_TRACING and model_span:
+                            outputs = {
+                                "text": ret.main_response,
+                                "usage": {
+                                    "prompt_tokens": ret.prompt_tokens,
+                                    "generation_tokens": ret.generation_tokens,
+                                    "reasoning_tokens": getattr(ret, "reasoning_tokens", None),
+                                },
+                                "request_for_logging": ret.request_for_logging,
+                                "response_for_logging": ret.response_for_logging,
+                            }
+                            if req.log_thoughts:
+                                outputs["chain_of_thought"] = ret.main_response_and_thoughts
+                            model_span.set_outputs(outputs)
+
+                    # 3. Parse Model Response
+                    with start_span("3.parse_move") if _HAS_TRACING else _nullcontext() as parse_span:
+                        pin = parsers.TextParserInput(
+                            text=ret.main_response,
+                            state_str=state.to_string(),
+                            legal_moves=parsers.get_legal_action_strings(state),
+                            player_number=state.current_player(),
+                        )
+                        if _HAS_TRACING and parse_span:
+                            parse_span.set_inputs({
+                                "text_to_parse": pin.text,
+                                "legal_moves": pin.legal_moves,
+                            })
+                        
+                        move = parser.parse(pin)
+
+                        if _HAS_TRACING and parse_span:
+                            parse_span.set_outputs({"parsed_move": move, "is_valid": move is not None})
+                    
+                    if not move:
+                        if _HAS_TRACING and move_span:
+                            move_span.add_event("Parsing failed, game terminated.")
+                        break
+                    
+                    # Record and apply move
+                    rec.push_san(move)
+                    state.apply_action(state.string_to_action(move))
+
         # Finalize PGN
         pgn_game = tournament_util.get_pgn(state)
         pgn_str = str(pgn_game)
@@ -310,7 +316,7 @@ def start_chess_game(req: ChessGameRequest):
             pass
         # Insert to SQL table if connector available
         try:
-            experiment = mlflow.get_experiment_by_name(exp_name)
+            experiment = mlflow.get_experiment_by_name(experiment_name)
             experiment_id = experiment.experiment_id if experiment else None
         except Exception:
             experiment_id = None
@@ -328,7 +334,7 @@ def start_chess_game(req: ChessGameRequest):
         except Exception:
             pass
         return {
-            "experiment_name": exp_name,
+            "experiment_name": experiment_name,
             "experiment_id": str(experiment_id) if experiment_id else None,
             "run_id": run_id,
             "result": result,
@@ -340,6 +346,40 @@ def start_chess_game(req: ChessGameRequest):
             mlflow.end_run()
         except Exception:
             pass
+
+def _build_model_from_player_config(pc: PlayerConfig, default_route: Optional[dict]):
+    """Helper to build a model from a PlayerConfig object."""
+    # For databricks provider always use SDK; pick endpoint by name or from default route
+    if pc.provider == "databricks":
+        endpoint_name = pc.model_name
+        if (not endpoint_name or endpoint_name.lower() == "auto") and default_route:
+            endpoint_name = default_route.get("name") or default_route.get("id")
+        greq = GenerateRequest(
+            provider="databricks",
+            model_name=endpoint_name or "",
+            prompt="",  # unused placeholder
+            temperature=pc.temperature,
+            max_tokens=pc.max_tokens,
+            stream=False,
+            timeout=pc.timeout,
+        )
+        return _build_model(greq)
+    base_url = pc.base_url or (default_route.get("base_url") if default_route else None)
+    model_name = pc.model_name
+    if (not model_name or model_name.lower() == "auto") and default_route:
+        # For non-databricks providers prefer the model id if present
+        model_name = default_route.get("model") or default_route.get("name") or model_name
+    greq = GenerateRequest(
+        provider=pc.provider,
+        model_name=model_name,
+        prompt="",  # unused placeholder
+        temperature=pc.temperature,
+        max_tokens=pc.max_tokens,
+        stream=False,
+        timeout=pc.timeout,
+        base_url=base_url,
+    )
+    return _build_model(greq)
 
 # --- Databricks discovery helpers ---
 def _workspace_url() -> Optional[str]:
