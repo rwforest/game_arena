@@ -1,0 +1,17 @@
+fastapi
+uvicorn[standard]
+mlflow>=2.14
+openai>=1.44
+google-genai>=0.5
+anthropic>=0.33
+httpx>=0.27
+pydantic>=2
+absl-py
+termcolor
+requests
+chess
+# Added for Databricks SQL writes and OpenSpiel game engine
+databricks-sql-connector
+open_spiel
+# Databricks official Python SDK for discovery via API
+databricks-sdk

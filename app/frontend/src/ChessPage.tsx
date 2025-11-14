@@ -1,0 +1,715 @@
+import { useEffect, useRef, useState, useCallback } from "react";
+import Chessground from 'react-chessground';
+import 'react-chessground/dist/styles/chessground.css';
+import { Chess, Move, KING, type Square, type PieceSymbol } from "chess.js";
+import { Swiper, SwiperSlide } from 'swiper/react';
+import { Navigation } from 'swiper/modules';
+// @ts-ignore
+import 'swiper/css';
+// @ts-ignore
+import 'swiper/css/navigation';
+import GroupedAnalysisSlide from "./components/GroupedAnalysisSlide";
+import { fetchCommentsForFen, type IApiRawMoveComment } from "./api-utils";
+import type { IGroupedAnalysisComment } from "./interfaces";
+import "./App.css";
+import { isPromotionMove, showPromotionDialog } from "./promotionUtils";
+import EvaluationBar from './eb';
+
+const BASE_URL = import.meta.env.BASE_URL || '/';
+
+// Helper function to determine if a specific piece is directly attacking the king
+const isPieceAtSquareDirectlyAttacking = (
+  chessInstance: Chess,
+  pieceSq: Square,
+  targetKingSq: Square,
+  attackerColor: "w" | "b"
+): boolean => {
+  const tempChess = new Chess(chessInstance.fen());
+  const pieceToIsolate = tempChess.get(pieceSq);
+  if (!pieceToIsolate || pieceToIsolate.color !== attackerColor) {
+    return false;
+  }
+  const squares: Square[] = [];
+  for (let r = 1; r <= 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      squares.push(`${String.fromCharCode(97 + c)}${r}` as Square);
+    }
+  }
+  for (const s of squares) {
+    if (s === pieceSq) {
+      continue;
+    }
+    const piece = tempChess.get(s);
+    if (piece && piece.color === attackerColor) {
+      tempChess.remove(s);
+    }
+  }
+  return tempChess.isAttacked(targetKingSq, attackerColor);
+};
+
+const getTrueAttackerSquare = (
+  chess: Chess,
+  kingSq: Square,
+  checkingColor: 'w' | 'b',
+  movedPieceSq: Square
+): Square | null => {
+  // 1. Check if the moved piece directly causes the check
+  if (isPieceAtSquareDirectlyAttacking(chess, movedPieceSq, kingSq, checkingColor)) {
+    return movedPieceSq;
+  }
+
+  // 2. Otherwise, simulate discovered check
+  const simulated = new Chess(chess.fen());
+  simulated.remove(movedPieceSq);
+  
+  for (let r = 1; r <= 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const sq = `${String.fromCharCode(97 + c)}${r}` as Square;
+      const piece = simulated.get(sq);
+      if (piece && piece.color === checkingColor) {
+        if (simulated.isAttacked(kingSq, checkingColor)) {
+          // Now simulate removing this and see if attack disappears
+          const temp = new Chess(simulated.fen());
+          temp.remove(sq);
+          if (!temp.isAttacked(kingSq, checkingColor)) {
+            return sq;
+          }
+        }
+      }
+    }
+  }
+
+  // Fallback if nothing is found
+  return movedPieceSq;
+};
+
+const pieceValues: Record<string, number> = { P: 1, N: 3, B: 3, R: 5, Q: 9 };
+
+const generatePgnWithApiComments = (chessInstance: Chess, analysisComments: IGroupedAnalysisComment[]): string => {
+  let pgnString = "";
+  const headers = chessInstance.header();
+  const standardHeaders = ["Event", "Site", "Date", "Round", "White", "Black", "Result"];
+  standardHeaders.forEach(key => {
+    pgnString += `[${key} "${headers[key] || "?"}"]\n`;
+  });
+  pgnString += "\n";
+  const verboseHistory = chessInstance.history({ verbose: true });
+  for (let i = 0; i < verboseHistory.length; i++) {
+    const moveData = verboseHistory[i];
+    const currentPly = i + 1;
+    const groupIndex = Math.floor((currentPly - 1) / 2);
+    const commentGroup = analysisComments[groupIndex];
+    if (moveData.color === 'w') {
+      pgnString += `${Math.ceil(currentPly / 2)}. `;
+    } else {
+      if (i === 0 || pgnString.endsWith("\n")) {
+        pgnString += `${Math.ceil(currentPly / 2)}... `;
+      }
+    }
+    pgnString += moveData.san;
+    const commentsForThisPly: string[] = [];
+    const isValidComment = (comment?: string) => comment && !comment.startsWith("Loading") && comment !== "No comment from White." && comment !== "No comment from Black." && comment !== "No Analyst comment." && comment !== "Error loading comment.";
+    if (commentGroup) {
+      if (moveData.color === 'w') {
+        if (isValidComment(commentGroup.whiteComment)) commentsForThisPly.push(`{White: ${commentGroup.whiteComment}}`);
+        if (isValidComment(commentGroup.analystComment) && (!commentGroup.blackIconMoveSan || !isValidComment(commentGroup.blackComment))) commentsForThisPly.push(`{Analyst: ${commentGroup.analystComment}}`);
+      } else {
+        if (isValidComment(commentGroup.blackComment)) commentsForThisPly.push(`{Black: ${commentGroup.blackComment}}`);
+        if (isValidComment(commentGroup.analystComment)) commentsForThisPly.push(`{Analyst: ${commentGroup.analystComment}}`);
+      }
+    }
+    commentsForThisPly.forEach(cmt => { pgnString += ` ${cmt}`; });
+    pgnString += " ";
+    if (moveData.color === 'b' && verboseHistory.length > currentPly) pgnString += "\n";
+  }
+  pgnString += headers.Result || "*";
+  return pgnString.trim();
+};
+
+interface ChessPageProps {
+  onViewPgn: (pgn: string) => void;
+}
+
+const ChessPage = ({ onViewPgn }: ChessPageProps) => {
+  const [chess] = useState(() => new Chess());
+  const chessRef = useRef(chess);
+
+  const [currentFen, setCurrentFen] = useState(chessRef.current.fen());
+  const [lastMoveHighlight, setLastMoveHighlight] = useState<[Square, Square] | undefined>(undefined);
+  const [dests, setDests] = useState<Map<Square, Square[]>>(new Map());
+  const [drawableShapes, setDrawableShapes] = useState<Array<{ orig: Square; dest: Square; brush: string }>>([]);
+  const [modalDrawableShapes, setModalDrawableShapes] = useState<Array<{ orig: Square; dest: Square; brush: string }>>([]);
+
+  const [history, setHistory] = useState<string[]>([]);
+  const [turn, setTurn] = useState<"user" | "computer">("user");
+  const turnRef = useRef(turn);
+  const [gameOver, setGameOver] = useState(false);
+  const gameOverRef = useRef(gameOver);
+  const [gameResult, setGameResult] = useState("");
+  const [moveCount, setMoveCount] = useState(0);
+  const [evaluationScore, setEvaluationScore] = useState(0);
+  const [boardSize, setBoardSize] = useState(() => (typeof window !== 'undefined' && window.innerWidth < 768 ? 320 : 560));
+  const [whiteTime, setWhiteTime] = useState(300);
+  const [blackTime, setBlackTime] = useState(300);
+  const [activeColor, setActiveColor] = useState<"w" | "b">("w");
+  const [timerActive, setTimerActive] = useState(false);
+  const timerActiveRef = useRef(timerActive);
+  const [analysisComments, setAnalysisComments] = useState<IGroupedAnalysisComment[]>([]);
+  const [captured, setCaptured] = useState<{ w: Record<string, number>; b: Record<string, number> }>({ w: { P: 0, N: 0, B: 0, R: 0, Q: 0 }, b: { P: 0, N: 0, B: 0, R: 0, Q: 0 } });
+  const [scoreAnimation, setScoreAnimation] = useState<{ w: { value: number; show: boolean } | null; b: { value: number; show: boolean } | null }>({ w: null, b: null });
+  const [finalFenForModal, setFinalFenForModal] = useState<string | null>(null);
+  const [lastMoveForModal, setLastMoveForModal] = useState<Move | null>(null);
+  const [isCheckmateForModal, setIsCheckmateForModal] = useState<boolean>(false);
+  const [checkmatedPlayerColorForModal, setCheckmatedPlayerColorForModal] = useState<'w' | 'b' | null>(null);
+  const [playerColor, setPlayerColor] = useState<'w' | 'b' | null>(null);
+  const playerColorRef = useRef(playerColor);
+  const [isColorSelectionModalOpen, setIsColorSelectionModalOpen] = useState(true);
+  const movesContainerRef = useRef<HTMLDivElement>(null);
+  const swiperRef = useRef<any>(null);
+  const [isCommentaryMinimized, setIsCommentaryMinimized] = useState(false);
+
+  useEffect(() => { turnRef.current = turn; }, [turn]);
+  useEffect(() => { gameOverRef.current = gameOver; }, [gameOver]);
+  useEffect(() => { timerActiveRef.current = timerActive; }, [timerActive]);
+  useEffect(() => { playerColorRef.current = playerColor; }, [playerColor]);
+
+  useEffect(() => {
+    if (movesContainerRef.current) {
+      movesContainerRef.current.scrollTop = movesContainerRef.current.scrollHeight;
+    }
+  }, [history]);
+
+  useEffect(() => {
+    if (swiperRef.current && analysisComments.length > 0) {
+      swiperRef.current.swiper?.slideTo(analysisComments.length - 1, 300);
+    }
+  }, [analysisComments]);
+
+  useEffect(() => {
+    const currentChess = chessRef.current;
+    setCurrentFen(currentChess.fen());
+    if (turnRef.current === 'user' && playerColorRef.current === currentChess.turn()) {
+      const newDestsMap = new Map<Square, Square[]>();
+      currentChess.moves({ verbose: true }).forEach(m => {
+        const movesForSquare = newDestsMap.get(m.from) || [];
+        movesForSquare.push(m.to);
+        newDestsMap.set(m.from, movesForSquare);
+      });
+      setDests(newDestsMap);
+    } else {
+      setDests(new Map());
+    }
+  }, [moveCount, turn, playerColor]);
+
+  const requestAndSetCommentForMove = useCallback(async (fenAfterMove: string, moveSan: string, ply: number, moveColor: 'w' | 'b') => {
+    const groupIndex = Math.floor((ply - 1) / 2);
+    const moveNumber = Math.floor((ply - 1) / 2) + 1;
+    setAnalysisComments(prevComments => {
+      const newComments = [...prevComments];
+      const existingGroup = newComments[groupIndex];
+      let updatedGroup: IGroupedAnalysisComment;
+      if (moveColor === 'w') {
+        const whiteMoveDisplay = `${moveNumber}. ${moveSan || ""}`;
+        updatedGroup = { ...(existingGroup || {}), move: whiteMoveDisplay, whiteComment: "Loading White's comment...", blackComment: existingGroup ? existingGroup.blackComment : undefined, analystComment: "Loading Analyst's comment...", iconMoveSan: moveSan, iconMoveColor: 'w' };
+        if (!existingGroup) updatedGroup.blackComment = undefined;
+      } else {
+        const blackMoveDisplay = `${moveSan || ""}`;
+        if (existingGroup) {
+          const whitePart = existingGroup.move.split(' ... ')[0];
+          updatedGroup = { ...existingGroup, move: `${whitePart} ... ${blackMoveDisplay}`, blackComment: "Loading Black's comment...", analystComment: "Loading Analyst's comment...", blackIconMoveSan: moveSan, blackIconMoveColor: 'b' };
+        } else {
+          updatedGroup = { move: `${moveNumber}... ${blackMoveDisplay}`, whiteComment: undefined, blackComment: "Loading Black's comment...", analystComment: "Loading Analyst's comment...", blackIconMoveSan: moveSan, blackIconMoveColor: 'b' };
+        }
+      }
+      newComments[groupIndex] = updatedGroup;
+      return newComments;
+    });
+    try {
+      const apiRawComments: IApiRawMoveComment[] = await fetchCommentsForFen(fenAfterMove);
+      setAnalysisComments(prevComments => {
+        const newComments = [...prevComments];
+        const groupToUpdate = newComments[groupIndex];
+        if (groupToUpdate) {
+          const targetGroup = { ...groupToUpdate };
+          let whiteTextFromApi: string | undefined, blackTextFromApi: string | undefined, analystTextFromApi: string | undefined;
+          apiRawComments.forEach(c => {
+            if (c.speaker.toLowerCase() === "white") whiteTextFromApi = c.text;
+            else if (c.speaker.toLowerCase() === "black") blackTextFromApi = c.text;
+            else if (c.speaker.toLowerCase() === "analyst") analystTextFromApi = c.text;
+          });
+          if (moveColor === 'w') {
+            targetGroup.whiteComment = whiteTextFromApi || "No comment from White.";
+            targetGroup.analystComment = analystTextFromApi || "No Analyst comment.";
+          } else {
+            targetGroup.blackComment = blackTextFromApi || "No comment from Black.";
+            targetGroup.analystComment = analystTextFromApi || "No Analyst comment.";
+          }
+          newComments[groupIndex] = targetGroup;
+          return newComments;
+        }
+        return prevComments;
+      });
+    } catch (error) {
+      console.error(`Error fetching comment for FEN ${fenAfterMove} (Ply ${ply}):`, error);
+      setAnalysisComments(prevComments => {
+        const newComments = [...prevComments];
+        const groupToUpdateOnError = newComments[groupIndex];
+        if (groupToUpdateOnError) {
+          const targetGroupOnError = { ...groupToUpdateOnError };
+          const errorMsg = "Error loading comment.";
+          if (moveColor === 'w') { if (targetGroupOnError.whiteComment?.startsWith("Loading")) targetGroupOnError.whiteComment = errorMsg; }
+          else { if (targetGroupOnError.blackComment?.startsWith("Loading")) targetGroupOnError.blackComment = errorMsg; }
+          if (targetGroupOnError.analystComment?.startsWith("Loading")) targetGroupOnError.analystComment = errorMsg;
+          newComments[groupIndex] = targetGroupOnError;
+          return newComments;
+        }
+        return prevComments;
+      });
+    }
+  }, []);
+
+  const getBestMove = useCallback(async (fen: string): Promise<{ move: { from: string; to: string; promotion?: string }; evaluation: number } | null> => {
+    try {
+      const res = await fetch(`https://chess-engine-fn-app-huhwfbdcevfdevg2.westus-01.azurewebsites.net/api/best_move`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fen }) });
+      if (!res.ok) { console.error("API request failed:", res.status, await res.text()); return null; }
+      const data = await res.json(); let evaluation = 0;
+      if (data.centipawns !== undefined && data.centipawns !== null) { evaluation = parseInt(data.centipawns, 10); if (isNaN(evaluation)) evaluation = (data.eval !== undefined && data.eval !== null && !isNaN(parseFloat(data.eval))) ? Math.round(parseFloat(data.eval) * 100) : 0; }
+      else if (data.eval !== undefined && data.eval !== null) { evaluation = Math.round(parseFloat(data.eval) * 100); if (isNaN(evaluation)) evaluation = 0; }
+      if (isNaN(evaluation)) evaluation = 0;
+      if (!data.move || typeof data.move !== 'string') return (data.centipawns !== undefined || data.eval !== undefined) ? { move: { from: "a0", to: "a0" }, evaluation } : null;
+      const moveStr = data.move as string; if (moveStr.toLowerCase() === "checkmate" || moveStr.toLowerCase() === "stalemate" || moveStr.length < 4 || moveStr.length > 5) return { move: { from: "a0", to: "a0" }, evaluation };
+      const from = moveStr.substring(0, 2); const to = moveStr.substring(2, 4); const promotion = moveStr.length === 5 ? moveStr.substring(4, 5) : undefined;
+      const isValidSquare = (sq: string) => /^[a-h][1-8]$/.test(sq); if (!isValidSquare(from) || !isValidSquare(to)) return { move: { from: "a0", to: "a0" }, evaluation };
+      return { move: { from, to, promotion }, evaluation };
+    } catch (error) { console.error("Error fetching best move/eval:", error); return null; }
+  }, []);
+  
+  const checkGameOver = useCallback(() => {
+    const currentChess = chessRef.current;
+    if (currentChess.isGameOver()) {
+      setTimerActive(false);
+      const historyVerbose = currentChess.history({ verbose: true });
+      const lastGameMove = historyVerbose[historyVerbose.length - 1] || null;
+      setFinalFenForModal(currentChess.fen());
+      setLastMoveForModal(lastGameMove);
+      setIsCheckmateForModal(currentChess.isCheckmate());
+      if (currentChess.isCheckmate()) setCheckmatedPlayerColorForModal(currentChess.turn());
+      else setCheckmatedPlayerColorForModal(null);
+      setTimeout(() => {
+        setGameOver(true);
+        let resultString = "Game over.";
+        if (currentChess.isCheckmate()) resultString = `${currentChess.turn() === "w" ? "Black" : "White"} wins by checkmate!`;
+        else if (currentChess.isStalemate()) resultString = "Draw by stalemate.";
+        else if (currentChess.isThreefoldRepetition()) resultString = "Draw by threefold repetition.";
+        else if (currentChess.isInsufficientMaterial()) resultString = "Draw by insufficient material.";
+        else if (currentChess.isDraw()) resultString = "Draw.";
+        setGameResult(resultString);
+      }, 100);
+      return true;
+    }
+    return false;
+  }, []);
+  
+  const updateBoardState = useCallback((move: Move) => {
+    const currentChess = chessRef.current;
+    setCurrentFen(currentChess.fen());
+    setLastMoveHighlight([move.from, move.to]);
+    const newShapes: Array<{ orig: Square; dest: Square; brush: string }> = [];
+    newShapes.push({ orig: move.from, dest: move.to, brush: 'blue' });
+    if (currentChess.inCheck()) {
+      const kingSq = currentChess.findPiece({ type: KING, color: currentChess.turn() })?.[0];
+      if (kingSq) {
+        const checkingColor = move.color;
+        const movedPieceToSq = move.to;
+        const attackerSq = getTrueAttackerSquare(currentChess, kingSq, checkingColor, movedPieceToSq);
+        if (attackerSq) { // Ensure attackerSq is not null
+          newShapes.push({ orig: attackerSq, dest: kingSq, brush: 'red' });
+        }
+      }
+    }
+    setDrawableShapes(newShapes);
+    setHistory(prevHistory => [...prevHistory, ...currentChess.history({verbose: false}).slice(prevHistory.length)]);
+    setMoveCount(Math.ceil(currentChess.history().length / 2));
+    if (move.captured) {
+      const capturedByColor = move.color; const opponentColor = capturedByColor === "w" ? "b" : "w";
+      const pieceVal = pieceValues[move.captured.toUpperCase()];
+      if (pieceVal) {
+        setScoreAnimation(prev => ({ ...prev, [capturedByColor]: { value: pieceVal, show: true }}));
+        setTimeout(() => {
+          setCaptured(prev => { const newOpponentCaptured = { ...prev[opponentColor], [move.captured!.toUpperCase()]: (prev[opponentColor][move.captured!.toUpperCase()] || 0) + 1 }; return {...prev, [opponentColor]: newOpponentCaptured }; });
+          setScoreAnimation(prev => ({ ...prev, [capturedByColor]: { ...prev[capturedByColor], show: false }}));
+        }, 1000);
+      }
+    }
+    if (!gameOverRef.current) {
+        const fenAfterMove = currentChess.fen();
+        const plyOfMove = currentChess.history().length;
+        requestAndSetCommentForMove(fenAfterMove, move.san, plyOfMove, move.color);
+    }
+  }, [requestAndSetCommentForMove]);
+
+  const makeComputerMove = useCallback(async () => {
+    if (gameOverRef.current) return false;
+    const currentChess = chessRef.current;
+    const fenToEvaluate = currentChess.fen();
+    const computerAPIResponse = await getBestMove(fenToEvaluate);
+    const turnForFenEvaluated = currentChess.turn();
+    if (computerAPIResponse && !currentChess.isGameOver()) {
+        let { move: computerMoveDetail, evaluation: evalFromApi } = computerAPIResponse;
+        const evalForDisplay = (turnForFenEvaluated === 'b') ? -evalFromApi : evalFromApi;
+        setEvaluationScore(evalForDisplay);
+        if (computerMoveDetail.from === "a0" && computerMoveDetail.to === "a0") {
+            if (checkGameOver()) return true;
+        } else {
+            const computerMoveResult = currentChess.move({ from: computerMoveDetail.from as Square, to: computerMoveDetail.to as Square, promotion: computerMoveDetail.promotion as PieceSymbol | undefined });
+            if (computerMoveResult) {
+                updateBoardState(computerMoveResult);
+                if (checkGameOver()) return true;
+            } else {
+                console.error("Computer's move from API was illegal:", computerMoveDetail, "FEN:", fenToEvaluate);
+                if (checkGameOver()) return true;
+            }
+        }
+    } else if (!currentChess.isGameOver()) {
+        console.error("No valid move or evaluation from computer API for FEN:", fenToEvaluate);
+        if (checkGameOver()) return true;
+    } else {
+         if (checkGameOver()) return true;
+    }
+    return false;
+  }, [getBestMove, updateBoardState, checkGameOver]);
+
+  const handleMove = useCallback(async (from: Square, to: Square, promotion?: PieceSymbol) => {
+    const currentChess = chessRef.current;
+    const humanPlaysAs = playerColorRef.current;
+    if (!timerActiveRef.current && currentChess.history().length === 0 && humanPlaysAs === 'w') setTimerActive(true);
+    else if (!timerActiveRef.current && currentChess.history().length === 1 && humanPlaysAs === 'b') setTimerActive(true);
+    let inComputerTurnLogic = false;
+    let promotionPieceToUse = promotion;
+    try {
+        if (!promotionPieceToUse) {
+            const pieceForPromotion = currentChess.get(from);
+            if (isPromotionMove(currentChess, from, to) && pieceForPromotion) {
+                 promotionPieceToUse = ((await showPromotionDialog(pieceForPromotion.color)) || "q") as PieceSymbol;
+            }
+        }
+        const moveAttempt = { from, to, promotion: promotionPieceToUse };
+        const moveResult = currentChess.move(moveAttempt);
+        if (!moveResult) {
+            setCurrentFen(currentChess.fen());
+            return;
+        }
+        updateBoardState(moveResult);
+        if (checkGameOver()) return;
+        setTurn("computer");
+        inComputerTurnLogic = true;
+        setActiveColor(currentChess.turn());
+        const gameEndedByComputer = await makeComputerMove();
+        inComputerTurnLogic = false; 
+        if (gameEndedByComputer || gameOverRef.current) return;
+        if (!currentChess.isGameOver()) {
+            setTurn("user");
+            setActiveColor(currentChess.turn());
+        } else {
+            checkGameOver();
+        }
+    } catch (error) {
+        console.error("Error in handleMove:", error);
+        setCurrentFen(currentChess.fen());
+        if (inComputerTurnLogic) {
+            if (!chessRef.current.isGameOver()) {
+                setTurn("user");
+                if (playerColorRef.current) setActiveColor(playerColorRef.current);
+                else console.error("Critical error: playerColorRef.current is null during error recovery.");
+            } else {
+                checkGameOver();
+            }
+        }
+    }
+  }, [updateBoardState, checkGameOver, makeComputerMove]);
+  
+  useEffect(() => {
+    if (!isColorSelectionModalOpen && playerColor) {
+
+        chessRef.current.reset();
+        setCurrentFen(chessRef.current.fen());
+        setLastMoveHighlight(undefined);
+        setDrawableShapes([]);
+        setDests(new Map());
+        setGameOver(false);
+        gameOverRef.current = false;
+        setGameResult("");
+        setCaptured({ w: { P: 0, N: 0, B: 0, R: 0, Q: 0 }, b: { P: 0, N: 0, B: 0, R: 0, Q: 0 } });
+        setHistory([]);
+        setWhiteTime(300);
+        setBlackTime(300);
+        setAnalysisComments([]);
+        setEvaluationScore(0);
+        setMoveCount(0);
+        setFinalFenForModal(null); setLastMoveForModal(null); setIsCheckmateForModal(false); setCheckmatedPlayerColorForModal(null);
+        const setupGameForPlayer = async () => {
+            if (playerColor === 'w') {
+                setActiveColor('w');
+                setTurn('user');
+                setTimerActive(false);
+            } else {
+                setActiveColor('w');
+                setTurn('computer');
+                setTimerActive(true);
+                await makeComputerMove();
+                if (!gameOverRef.current) {
+                    setActiveColor('b');
+                    setTurn('user');
+                }
+            }
+        };
+        setupGameForPlayer();
+    }
+  }, [isColorSelectionModalOpen, playerColor, makeComputerMove]);
+
+  const handleColorSelect = (chosenColor: 'w' | 'b') => {
+    setPlayerColor(chosenColor);
+    setIsColorSelectionModalOpen(false);
+  };
+
+  const newGame = () => {
+    setGameOver(false);
+    gameOverRef.current = false;
+    setGameResult("");
+    setTimerActive(false);
+    setAnalysisComments([]);
+    setEvaluationScore(0);
+    setMoveCount(0);
+    setHistory([]);
+    setCaptured({ w: { P: 0, N: 0, B: 0, R: 0, Q: 0 }, b: { P: 0, N: 0, B: 0, R: 0, Q: 0 } });
+    setLastMoveHighlight(undefined);
+    setDrawableShapes([]);
+    setDests(new Map());
+    setPlayerColor(null);
+    setIsColorSelectionModalOpen(true);
+    chessRef.current.reset();
+    setCurrentFen(chessRef.current.fen());
+  };
+
+  useEffect(() => {
+    const resizeBoard = () => {
+        const isMobile = window.innerWidth < 768; 
+        const newBoardSize = isMobile ? Math.min(window.innerWidth - 40, 320) : 560; 
+        setBoardSize(newBoardSize);
+    };
+    resizeBoard(); 
+    window.addEventListener("resize", resizeBoard);
+    return () => window.removeEventListener("resize", resizeBoard);
+  }, [setBoardSize]);
+
+  const handleTimeLoss = useCallback((colorName: "White" | "Black") => { 
+    setTimerActive(false); 
+    setGameOver(true);
+    setGameResult(`${colorName} loses on time.`); 
+    setFinalFenForModal(chessRef.current.fen());
+    const historyVerbose = chessRef.current.history({ verbose: true });
+    setLastMoveForModal(historyVerbose[historyVerbose.length - 1] || null);
+    setIsCheckmateForModal(false); 
+    setCheckmatedPlayerColorForModal(null);
+  }, []);
+  
+  useEffect(() => {
+    if (gameOverRef.current || !timerActiveRef.current || isColorSelectionModalOpen) return;
+    const interval = setInterval(() => {
+      if (activeColor === "w") setWhiteTime(prev => { if (prev <= 1) { clearInterval(interval); handleTimeLoss("White"); return 0; } return prev - 1; });
+      else setBlackTime(prev => { if (prev <= 1) { clearInterval(interval); handleTimeLoss("Black"); return 0; } return prev - 1; });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [activeColor, timerActive, isColorSelectionModalOpen, handleTimeLoss]); 
+  
+  useEffect(() => { 
+    if (!isColorSelectionModalOpen && playerColor) { }
+  }, [moveCount, playerColor, isColorSelectionModalOpen, checkGameOver]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const targetElement = event.target as HTMLElement;
+      if (targetElement.tagName === 'INPUT' || targetElement.tagName === 'TEXTAREA' || targetElement.isContentEditable) return;
+      if (swiperRef.current?.swiper) {
+        if (event.key === "ArrowLeft") { event.preventDefault(); swiperRef.current.swiper.slidePrev(); }
+        else if (event.key === "ArrowRight") { event.preventDefault(); swiperRef.current.swiper.slideNext(); }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (gameOver && finalFenForModal && lastMoveForModal) {
+      const shapes: Array<{ orig: Square; dest: Square; brush: string }> = [
+        { orig: lastMoveForModal.from, dest: lastMoveForModal.to, brush: 'blue' }
+      ];
+      if (isCheckmateForModal && checkmatedPlayerColorForModal) {
+        const tempChess = new Chess(finalFenForModal);
+        const kingSq = tempChess.findPiece({ type: KING, color: checkmatedPlayerColorForModal })?.[0];
+        if (kingSq) {
+          const checkingColor = checkmatedPlayerColorForModal === 'w' ? 'b' : 'w';
+          const attackerSq = getTrueAttackerSquare(tempChess, kingSq, checkingColor, lastMoveForModal.to);
+          if (attackerSq) { // Add this check
+            shapes.push({ orig: attackerSq, dest: kingSq, brush: 'red' });
+          }
+        }
+      }
+      setModalDrawableShapes(shapes);
+    } else {
+      setModalDrawableShapes([]);
+    }
+  }, [gameOver, finalFenForModal, lastMoveForModal, isCheckmateForModal, checkmatedPlayerColorForModal, gameResult]);
+  
+  const formatTime = (seconds: number): string => { 
+    const mins = Math.floor(seconds / 60); 
+    const secs = seconds % 60; 
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`; 
+  };
+
+  const AnimatedTotal = ({ color }: { color: "w" | "b" }) => { 
+    const opponentColor = color === 'w' ? 'b' : 'w';
+    const total = Object.entries(captured[opponentColor]).reduce((sum, [p, count]) => sum + (pieceValues[p.toUpperCase()] || 0) * count, 0); 
+    const animation = scoreAnimation[color];
+    const bgColor = color === "w" ? "bg-black" : "bg-white"; 
+    const textColor = color === "w" ? "text-white" : "text-black"; 
+    return (<div className={`relative ${bgColor} ${textColor} rounded-lg w-10 h-10 flex items-center justify-center text-sm`}>{animation?.show && animation.value > 0 ? <span className="font-mono text-yellow-400 animate-ping-short">+{animation.value}</span> : <span className="font-mono">{total > 0 ? `+${total}`: total}</span>}</div>); 
+  };
+
+  return (
+    <>
+      {isColorSelectionModalOpen && (
+         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-slate-700 text-white rounded-xl shadow-2xl p-6 sm:p-8 max-w-md w-full text-center border border-slate-600">
+            <h2 className="text-2xl sm:text-3xl font-bold mb-6">Choose Your Side</h2>
+            <div className="flex gap-4 justify-center">
+              <button onClick={() => handleColorSelect('w')} className="px-6 py-3 sm:px-8 sm:py-4 bg-gray-200 text-slate-800 rounded-lg cursor-pointer hover:bg-white transition-colors text-base sm:text-lg font-semibold shadow-md hover:shadow-lg" aria-label="Play as White">Play as White <img src={`${BASE_URL}img/chesspieces/wikipedia/wK.png`} alt="White King" className="inline h-8 w-8 ml-2"/></button>
+              <button onClick={() => handleColorSelect('b')} className="px-6 py-3 sm:px-8 sm:py-4 bg-slate-800 text-white rounded-lg cursor-pointer hover:bg-slate-900 transition-colors text-base sm:text-lg font-semibold shadow-md hover:shadow-lg" aria-label="Play as Black">Play as Black <img src={`${BASE_URL}img/chesspieces/wikipedia/bK.png`} alt="Black King" className="inline h-8 w-8 ml-2"/></button>
+            </div>
+          </div>
+        </div>
+      )}
+
+       {gameOver && !isColorSelectionModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-slate-700/90 text-white rounded-xl shadow-2xl p-4 sm:p-6 max-w-2xl w-full text-center border border-slate-600">
+            <h2 className="text-2xl sm:text-3xl font-bold mb-3">Game Over</h2>
+            {finalFenForModal && (
+              <Chessground
+                fen={finalFenForModal}
+                viewOnly={true}
+                style={{ margin: '0 auto 16px auto', border: '2px solid #4A5568', borderRadius: '4px' }}
+                drawable={{ enabled: true, autoShapes: modalDrawableShapes }}
+              />
+            )}
+            <p className="text-lg sm:text-xl mb-6">{gameResult}</p>
+            <div className="flex gap-4 justify-center">
+              <button onClick={newGame} className="px-5 py-2.5 sm:px-6 sm:py-3 bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700 transition-colors text-base sm:text-lg font-semibold shadow-md hover:shadow-lg">Play Again</button>
+              <button onClick={() => {setGameOver(false); gameOverRef.current = false;}} className="px-5 py-2.5 sm:px-6 sm:py-3 bg-gray-600 text-white rounded-lg cursor-pointer hover:bg-gray-700 transition-colors text-base sm:text-lg font-semibold shadow-md hover:shadow-lg">Close</button>
+              <button onClick={() => { const pgnWithComments = generatePgnWithApiComments(chessRef.current, analysisComments); onViewPgn(pgnWithComments); }} className="px-5 py-2.5 sm:px-6 sm:py-3 bg-purple-600 text-white rounded-lg cursor-pointer hover:bg-purple-700 transition-colors text-base sm:text-lg font-semibold shadow-md hover:shadow-lg">Game Review</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!isColorSelectionModalOpen && playerColor && (
+        <div className="min-h-screen p-2 sm:p-3 bg-slate-800 text-slate-100 bg-[url('/img/chess-pieces.jpg')] bg-cover bg-center bg-blend-multiply selection:bg-emerald-500 selection:text-white">
+          <div className="w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] xl:grid-cols-[2fr_3fr_2fr] gap-3 sm:gap-4 items-start">
+            <div className="order-2 lg:order-1 lg:col-span-1 space-y-3 sm:space-y-4 bg-slate-700/70 backdrop-blur-sm p-3 sm:p-4 rounded-lg shadow-xl border border-slate-600 max-h-[calc(100vh-100px)] overflow-y-auto">
+               <div className="p-2 bg-slate-600/50 rounded-lg">
+                {/* Theme buttons are commented out */}
+              </div>
+               <div className="p-2 bg-slate-600/50 rounded-lg">
+                  <h2 className="text-lg sm:text-xl text-center font-semibold text-slate-100 mb-2">Game Moves</h2>
+                  <div ref={movesContainerRef} className="moves-table max-h-96 overflow-y-auto bg-slate-800/50 p-2 rounded scrollbar-thin scrollbar-thumb-slate-500 scrollbar-track-slate-700">
+                  {history.length === 0 && <p className="text-center text-slate-400 italic">No moves yet.</p>}
+                  {Array.from({ length: Math.ceil(history.length / 2) }).map((_, i) => {
+                      const whiteMove = history[i * 2]; const blackMove = history[i * 2 + 1];
+                      const renderPieceIcon = (moveSan: string, isWhitePlayerMove: boolean) => { if (!moveSan) return null; let pieceType: PieceSymbol = 'p'; if (moveSan.startsWith('K')) pieceType = 'k'; else if (moveSan.startsWith('Q')) pieceType = 'q'; else if (moveSan.startsWith('R')) pieceType = 'r'; else if (moveSan.startsWith('B')) pieceType = 'b'; else if (moveSan.startsWith('N')) pieceType = 'n'; else if (moveSan.startsWith('O-O')) pieceType = 'k'; const pieceColor = isWhitePlayerMove ? 'w' : 'b'; return <img src={`${BASE_URL}img/chesspieces/wikipedia/${pieceColor}${pieceType.toUpperCase()}.png`} alt={`${pieceColor}${pieceType}`} className="w-4 h-4 inline mr-1" />; };
+                      return (<div key={i} className="flex items-center gap-2 py-1 text-sm border-b border-slate-700 last:border-b-0"><div className="text-slate-400 font-medium w-6 text-right">{i + 1}.</div><div className="flex-1 p-1 bg-slate-200/10 rounded min-w-[60px] text-center">{whiteMove && <span className="text-slate-50">{renderPieceIcon(whiteMove, true)}{whiteMove}</span>}</div><div className="flex-1 p-1 bg-slate-900/20 rounded min-w-[60px] text-center">{blackMove && <span className="text-slate-50">{renderPieceIcon(blackMove, false)}{blackMove}</span>}</div></div>);
+                  })}</div>
+              </div>
+            </div>
+
+            <div className="order-1 lg:order-2 lg:col-span-1 flex justify-center items-start relative">
+              <div className="flex items-stretch">
+                  <div className="ml-1 sm:ml-2 flex items-center"><EvaluationBar evaluation={evaluationScore} height={boardSize} /></div>
+                  <div style={{ width: `${boardSize}px`, height: `${boardSize}px` }} className="shadow-2xl rounded-md overflow-hidden border-4 border-slate-600">
+                    <Chessground
+                      width={boardSize}
+                      height={boardSize}
+                      fen={currentFen}
+                      orientation={playerColor === 'b' ? 'black' : 'white'}
+                      turnColor={chessRef.current.turn() === 'w' ? 'white' : 'black'}
+                      onMove={(orig, dest) => { void handleMove(orig as Square, dest as Square); }}
+                      lastMove={lastMoveHighlight}
+                      movable={{
+                          color: (turn === 'user' && playerColor ? (playerColor === 'w' ? 'white' : 'black') : undefined),
+                          dests: dests,    // Legal destinations map
+                          showDests: true,        // Show destination dots (default: true)
+                      }}                      
+                      selectable={{
+                        enabled: turn === 'user' && playerColor === chessRef.current.turn(),
+                      }}
+                      drawable={{
+                        enabled: true,
+                        autoShapes: drawableShapes,
+                      }}                      
+                    />
+                  </div>
+              </div>
+            </div>
+
+            <div className="order-3 lg:order-3 lg:col-span-1 space-y-3 sm:space-y-4 bg-slate-700/70 backdrop-blur-sm p-3 sm:p-4 rounded-lg shadow-xl border border-slate-600 max-h-[calc(100vh-100px)] overflow-y-auto">
+               <div className="space-y-2 p-2 bg-slate-600/50 rounded-lg">
+                <div className="flex items-center justify-between gap-2 p-1 rounded bg-slate-900/30">
+                    <div className="flex items-center gap-1">
+                        <img src={`${BASE_URL}img/chesspieces/wikipedia/bK.png`} alt="Black King" className="size-7 sm:size-8 object-contain p-0.5 bg-black/30 rounded-full"/>
+                        <span className="font-semibold text-sm sm:text-base">{playerColor === 'b' ? "Player (Black)" : "Computer (Black)"}</span>
+                    </div><AnimatedTotal color="b" />
+                </div>
+                <div className="grid grid-cols-5 gap-1 sm:gap-2 items-center px-1">{["P", "N", "B", "R", "Q"].map(p => (<div key={`b${p}`} className="flex flex-col items-center"><img src={`${BASE_URL}img/chesspieces/wikipedia/b${p}.png`} alt={`black ${p}`} className="size-7 sm:size-8 object-contain"/><span className="text-xs font-mono w-6 h-5 bg-black/50 text-white rounded-md flex items-center justify-center mt-0.5">{captured.b[p.toUpperCase() as PieceSymbol]}</span></div>))}</div>
+                <div className="flex items-center justify-between gap-2 p-1 rounded bg-slate-200/20 mt-2">
+                    <div className="flex items-center gap-1">
+                        <img src={`${BASE_URL}img/chesspieces/wikipedia/wK.png`} alt="White King" className="size-7 sm:size-8 object-contain p-0.5 bg-white/30 rounded-full"/>
+                        <span className="font-semibold text-sm sm:text-base">{playerColor === 'w' ? "Player (White)" : "Computer (White)"}</span>
+                    </div><AnimatedTotal color="w" />
+                </div>
+                <div className="grid grid-cols-5 gap-1 sm:gap-2 items-center px-1">{["P", "N", "B", "R", "Q"].map(p => (<div key={`w${p}`} className="flex flex-col items-center"><img src={`${BASE_URL}img/chesspieces/wikipedia/w${p}.png`} alt={`white ${p}`} className="size-7 sm:size-8 object-contain"/><span className="text-xs font-mono w-6 h-5 bg-white/80 text-black rounded-md flex items-center justify-center mt-0.5">{captured.w[p.toUpperCase() as PieceSymbol]}</span></div>))}</div>
+              </div>
+               <div className="flex flex-col items-center space-y-2 p-3 bg-slate-600/50 rounded-lg">
+                <div className={`text-lg sm:text-xl font-bold ${ turn === "user" ? "text-blue-400" : "text-orange-400"}`}>{turn === "user" ? "Your Turn" : "Computer Thinking..."}</div>
+                <img src={`${BASE_URL}img/chesspieces/wikipedia/${ activeColor === "w" ? "wK" : "bK" }.png`} alt="Active King" className="size-16 sm:size-20 object-contain my-1" />
+                <div className="flex w-full justify-around items-center gap-2">
+                  <div className={`p-2 rounded-lg font-mono text-base sm:text-lg w-full text-center ${ activeColor === "w" && timerActive ? "bg-emerald-500/30 border-2 border-emerald-500 animate-pulse-border" : "bg-slate-500/30 border-2 border-transparent"}`}><span className="font-semibold">White:</span> {formatTime(whiteTime)}</div>
+                  <div className={`p-2 rounded-lg font-mono text-base sm:text-lg w-full text-center ${ activeColor === "b" && timerActive ? "bg-emerald-500/30 border-2 border-emerald-500 animate-pulse-border" : "bg-slate-500/30 border-2 border-transparent"}`}><span className="font-semibold">Black:</span> {formatTime(blackTime)}</div>
+                </div>
+              </div>
+              <div className="flex flex-col space-y-2 sm:space-y-3 p-2 bg-slate-600/50 rounded-lg">
+                <button onClick={newGame} className="bg-blue-600 text-base sm:text-lg cursor-pointer hover:bg-blue-700 text-white py-2.5 sm:py-3 px-4 rounded-lg shadow-md hover:shadow-lg transition-all font-medium">New Game</button>
+              </div>
+            </div>
+          </div>
+
+          {analysisComments.length > 0 && (
+            <div className="order-4 lg:order-4 lg:col-span-5 p-4 bg-slate-700/80 backdrop-blur-sm rounded-lg shadow-xl mt-4 w-full md:w-3/4 mx-auto border border-slate-600">
+              <h2 className="text-xl font-semibold mb-3 text-center text-slate-100 flex items-center justify-center">
+                Move Commentary
+                <button onClick={() => setIsCommentaryMinimized(!isCommentaryMinimized)} className="ml-3 p-1 rounded-full hover:bg-slate-600 transition-colors" aria-label={isCommentaryMinimized ? "Expand commentary" : "Minimize commentary"}>
+                  {isCommentaryMinimized ? <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-chevron-down size-5"><path d="m6 9 6 6 6-6"/></svg> : <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-chevron-up size-5"><path d="m18 15-6-6-6 6"/></svg>}
+                </button>
+              </h2>
+              <Swiper ref={swiperRef} modules={[Navigation]} spaceBetween={30} slidesPerView={1} navigation autoHeight={true} style={{ "--swiper-navigation-color": "#E2E8F0", "--swiper-pagination-color": "#E2E8F0" } as React.CSSProperties} className="analysis-carousel bg-slate-800/50 rounded">
+                {!isCommentaryMinimized && analysisComments.map((commentGroup, i) => (<SwiperSlide key={i} className="p-4"><GroupedAnalysisSlide comment={commentGroup} /></SwiperSlide>))}
+              </Swiper>
+              {isCommentaryMinimized && <p className="text-center text-slate-400 italic py-4">Commentary minimized.</p>}
+               {analysisComments.length === 0 && !gameOver && ( <p className="text-center text-slate-400 italic py-4">No commentary yet. Make a move!</p> )}
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
+};
+
+export default ChessPage;
