@@ -1,0 +1,22 @@
+execution_duration_ms: 1
+request_preview: '{"text_to_parse": "We have a chess position after moves: 1.e4 c5
+  2.Nf3 Nc6 3.d4. Let''s reconstruct board.\n\nInitial position: standard.\n\nMoves:\n1.
+  e4: white pawn from e2 to e4.\n... c5: black pawn from c7 to c5.\n2. Nf3: white
+  knight g1 to f3.\n... Nc6: black knight b8 to c6.\n3. d4: white pawn from d2 to
+  d4.\n\nNow it''s black to move. Position: Let''s list pieces.\n\nWhite:\nKing e1,
+  Queen d1, rooks a1 h1, bishops c1 f1, knights b1 f3, pawns: a2 b2 c2 d4 e4 f2 g2
+  h2.\n\nBlack:\nKing e8, Queen d8, rooks a8 h8, bishops c8 f8, knights c6 g8, pawns:
+  a7 b7 c5 d7 e7 f7 g7 h7.\n\nIt''s black''s turn, move number 3... (since white just
+  played 3.d4). The FEN given: r1bqkbnr/pp1ppppp/2n5/2p5/3PP3/5N2/PPP2PPP/RNBQKB1R
+  b KQkq - 0 3 matches.\n\nWe need best move for black. Evaluate position: White just
+  advanced d-pawn to d4, creating a pawn duo e4 and d4, controlling center. Black
+  has a pawn on c5, knight on c6, typical Sicilian Defense, Open Sicilian after 3.d4
+  cxd4? Wait typical line is 3.d4...'
+request_time: '2025-11-15T03:35:58.533Z'
+response_preview: '{"parsed_move": null, "is_valid": false}'
+state: OK
+trace_id: tr-0de9fae17a4516ad4badf509b34b3636
+trace_location:
+  mlflow_experiment:
+    experiment_id: '0'
+  type: MLFLOW_EXPERIMENT

@@ -167,6 +167,7 @@ const ChessPage = ({ onViewPgn }: ChessPageProps) => {
   const movesContainerRef = useRef<HTMLDivElement>(null);
   const swiperRef = useRef<any>(null);
   const [isCommentaryMinimized, setIsCommentaryMinimized] = useState(false);
+  const [commentaryFlipped, setCommentaryFlipped] = useState(false);
 
   useEffect(() => { turnRef.current = turn; }, [turn]);
   useEffect(() => { gameOverRef.current = gameOver; }, [gameOver]);
@@ -695,12 +696,15 @@ const ChessPage = ({ onViewPgn }: ChessPageProps) => {
             <div className="order-4 lg:order-4 lg:col-span-5 p-4 bg-slate-700/80 backdrop-blur-sm rounded-lg shadow-xl mt-4 w-full md:w-3/4 mx-auto border border-slate-600">
               <h2 className="text-xl font-semibold mb-3 text-center text-slate-100 flex items-center justify-center">
                 Move Commentary
+                <button onClick={() => setCommentaryFlipped(!commentaryFlipped)} className="ml-3 p-1 rounded-full hover:bg-slate-600 transition-colors" aria-label="Flip commentary sides" title="Flip commentary sides">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-arrow-left-right size-5"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>
+                </button>
                 <button onClick={() => setIsCommentaryMinimized(!isCommentaryMinimized)} className="ml-3 p-1 rounded-full hover:bg-slate-600 transition-colors" aria-label={isCommentaryMinimized ? "Expand commentary" : "Minimize commentary"}>
                   {isCommentaryMinimized ? <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-chevron-down size-5"><path d="m6 9 6 6 6-6"/></svg> : <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-chevron-up size-5"><path d="m18 15-6-6-6 6"/></svg>}
                 </button>
               </h2>
               <Swiper ref={swiperRef} modules={[Navigation]} spaceBetween={30} slidesPerView={1} navigation autoHeight={true} style={{ "--swiper-navigation-color": "#E2E8F0", "--swiper-pagination-color": "#E2E8F0" } as React.CSSProperties} className="analysis-carousel bg-slate-800/50 rounded">
-                {!isCommentaryMinimized && analysisComments.map((commentGroup, i) => (<SwiperSlide key={i} className="p-4"><GroupedAnalysisSlide comment={commentGroup} /></SwiperSlide>))}
+                {!isCommentaryMinimized && analysisComments.map((commentGroup, i) => (<SwiperSlide key={i} className="p-4"><GroupedAnalysisSlide comment={commentGroup} flipped={commentaryFlipped} /></SwiperSlide>))}
               </Swiper>
               {isCommentaryMinimized && <p className="text-center text-slate-400 italic py-4">Commentary minimized.</p>}
                {analysisComments.length === 0 && !gameOver && ( <p className="text-center text-slate-400 italic py-4">No commentary yet. Make a move!</p> )}

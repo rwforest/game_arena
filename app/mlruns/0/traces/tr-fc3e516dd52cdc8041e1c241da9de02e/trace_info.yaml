@@ -1,0 +1,22 @@
+execution_duration_ms: 1
+request_preview: '{"text_to_parse": "I''ll analyze this position step by step.\n\n**Current
+  Position Analysis:**\n- Material is roughly equal\n- Black''s queen on a5 is attacking
+  my knight on c3\n- My bishop on g5 is pinning Black''s knight on f6 to the king
+  on e8\n- Black''s king is still in the center and hasn''t castled\n- Black''s queen
+  is somewhat out of play on a5\n\n**Threats to Consider:**\n1. Black is threatening
+  my knight on c3 with the queen on a5\n2. Black wants to castle kingside to safety\n\n**Candidate
+  Moves:**\n1. **O-O-O** (Castle queenside) - Gets my king to safety and connects
+  rooks\n2. **Bxf6** - Removes the defender and damages Black''s pawn structure\n3.
+  **Bd2** - Defends the knight but seems passive\n4. **Nd5** - Attacks the queen and
+  creates central pressure\n\n**Deep Analysis:**\n\nLet me examine **Nd5**:\n- Attacks
+  the queen on a5, forcing it to move\n- Attacks the bishop on e7\n- Attacks the pawn
+  on c6\n- Creates a powerful centralized knight\n- Black would likely play exd5,
+  but t...'
+request_time: '2025-11-15T03:44:16.504Z'
+response_preview: '{"parsed_move": null, "is_valid": false}'
+state: OK
+trace_id: tr-fc3e516dd52cdc8041e1c241da9de02e
+trace_location:
+  mlflow_experiment:
+    experiment_id: '0'
+  type: MLFLOW_EXPERIMENT

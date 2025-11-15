@@ -1,0 +1,28 @@
+execution_duration_ms: 12971
+request_preview: '{"model": "<game_arena.harness.databricks_sdk.DatabricksModel object
+  at 0x11a1e1450>", "prompt_text": "Let''s play chess. The current game state in Forsyth-Edwards
+  Notation (FEN) notation is:\nrnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq
+  - 0 1\nThe moves played so far are:\n1.\nYou are playing as player White.\nIt is
+  now your turn. Play your strongest move. The move MUST be legal. Reason step by
+  step to come up with your move, then output your final answer in the format \"Final
+  Answer: X\" where X is your chosen move in standard algebraic notation (SAN).",
+  "player": "black"}'
+request_time: '2025-11-15T03:30:57.759Z'
+response_preview: '{"text": "I need to analyze the position and choose the best opening
+  move for White.\n\n**Current Position Analysis:**\nThe FEN notation shows this is
+  the starting position of a chess game. No moves have been played yet (move 1 for
+  White).\n\n**Opening Principles to Consider:**\n1. Control the center\n2. Develop
+  pieces quickly\n3. Ensure king safety\n4. Create opportunities for piece coordination\n\n**Candidate
+  Moves:**\nLet me consider the most popular and strongest first moves:\n\n1. **e4**
+  - King''s pawn opening\n   - Controls central squares d5 and f5\n   - Opens lines
+  for the bishop on f1 and queen\n   - Most popular move historically\n   - Leads
+  to open, tactical games\n\n2. **d4** - Queen''s pawn opening\n   - Controls central
+  squares c5 and e5\n   - Opens lines for the bishop on c1\n   - Slightly more positional\n   -
+  Also very popular at all levels\n\n3. **Nf3** - Reti/Indian systems\n   - Develops
+  a piece\n   - Controls central squares\n   - More flexible but less direct\n\n...'
+state: OK
+trace_id: tr-1a99c62b4e0d8d3c082abf36f9ec777b
+trace_location:
+  mlflow_experiment:
+    experiment_id: '0'
+  type: MLFLOW_EXPERIMENT

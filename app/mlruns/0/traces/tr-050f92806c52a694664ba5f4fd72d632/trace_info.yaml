@@ -1,0 +1,22 @@
+execution_duration_ms: 1
+request_preview: '{"text_to_parse": "We have a chess position after moves: 1.e4 c5
+  2.Nf3. So board: initial, white pawn e4, black pawn c5, white knight g1 to f3. It''s
+  black to move.\n\nWe need best move. Let''s analyze position: Standard Sicilian
+  Defense, after 2.Nf3, typical moves are ...d6, ...Nc6, ...e6, ...g6, ...Nf6, ...d5?
+  Actually after 2...d6 is common (Najdorf later). Also ...Nc6 is main line (Classical).
+  ...e6 is also possible (Scheveningen). ...g6 is Dragon. ...Nf6 attacks e4 pawn.
+  Let''s evaluate: board pieces: White: King e1, queen d1, rooks a1 h1, bishops c1
+  f1, knights b1 f3, pawns: a2 b2 c2 d2 e4 f2 g2 h2. Black: King e8, queen d8, rooks
+  a8 h8, bishops c8 f8, knights b8 g8, pawns: a7 b7 c5 d7 e7 f7 g7 h7.\n\nBlack to
+  move. The strongest move? In theory, ...d6 is solid, ...Nc6 develops, ...Nf6 attacks
+  e4. Let''s consider ...Nf6: after ...Nf6, white can play e5? Actually white pawn
+  on e4, if black knight attacks e4, white can defend with Nc3 or d4. But typical
+  Sicilian line: 2...Nf6 is not...'
+request_time: '2025-11-15T03:35:40.957Z'
+response_preview: '{"parsed_move": "Nc6", "is_valid": true}'
+state: OK
+trace_id: tr-050f92806c52a694664ba5f4fd72d632
+trace_location:
+  mlflow_experiment:
+    experiment_id: '0'
+  type: MLFLOW_EXPERIMENT

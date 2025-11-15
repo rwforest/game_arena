@@ -1,0 +1,30 @@
+execution_duration_ms: 8383
+request_preview: '{"model": "<game_arena.harness.databricks_sdk.DatabricksModel object
+  at 0x11776dbd0>", "prompt_text": "Let''s play chess. The current game state in Forsyth-Edwards
+  Notation (FEN) notation is:\nr1bqk2r/pp2bppp/2p1pn2/6B1/3QP3/2N5/PPP2PPP/R3KB1R
+  b KQkq - 3 8\nThe moves played so far are:\n1. e4 c5 2. Nf3 Nc6 3. d4 cxd4 4. Nxd4
+  e6 5. Nc3 Nf6 6. Nxc6 dxc6 7. Bg5 Be7 8. Qd4\nYou are playing as player Black.\nIt
+  is now your turn. Play your strongest move. The move MUST be legal. Reason step
+  by step to come up with your move, then output your final answer in the format \"Final
+  Answer: X\" where X is your chosen move in standard algebraic notation (SAN).",
+  "player": "black"}'
+request_time: '2025-11-15T03:43:53.529Z'
+response_preview: '{"text": "I''ll analyze the current position and find the strongest
+  move for Black.\n\nCurrent position assessment:\n- Material is equal\n- White has
+  developed their queen, knights, and bishop\n- Black has developed knights and bishop,
+  with king still in the center\n- White''s Bg5 is pinning my Nf6 to the queen\n-
+  White''s Qd4 is attacking my c6 pawn\n\nKey considerations:\n1. The pin on my knight
+  is annoying but not immediately threatening\n2. I need to protect the c6 pawn or
+  accept its loss\n3. I should continue development and consider castling for king
+  safety\n\nLet me evaluate candidate moves:\n\n1. O-O (Castling kingside)\nThis would
+  improve king safety and connect my rooks. However, after O-O, White could play Bxf6
+  followed by Qxc6, winning a pawn.\n\n2. Qa5\nThis defends the c6 pawn and develops
+  my queen. It also puts pressure on the c3 knight, creating some counterplay.\n\n3.
+  Bd7\nDevelops a bishop and prepares to connect rooks, but doesn''t address the immediate
+  threat to c6.\...'
+state: OK
+trace_id: tr-6b26b93e38dd901be69f6337c21c5f0d
+trace_location:
+  mlflow_experiment:
+    experiment_id: '0'
+  type: MLFLOW_EXPERIMENT

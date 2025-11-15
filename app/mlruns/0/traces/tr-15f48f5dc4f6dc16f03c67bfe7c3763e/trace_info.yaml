@@ -1,0 +1,21 @@
+execution_duration_ms: 1
+request_preview: '{"text_to_parse": "I''ll analyze this position step by step.\n\n**Current
+  Position Analysis:**\n- Material is equal\n- Black has doubled c-pawns (c6 and c7
+  would be if d-pawn hadn''t been captured, but actually Black has c6 pawn and the
+  d-file is open)\n- This is a Sicilian Defense, specifically the Paulsen/Taimanov
+  variation after the knight trade on c6\n\n**Key Features:**\n1. Black has a slightly
+  damaged pawn structure with the c6 pawn\n2. The d-file is semi-open\n3. Black''s
+  pieces are not fully developed (bishop on c8, king still in center)\n4. White has
+  good central control with the e4 pawn\n\n**Candidate Moves:**\n1. **Qxd8+** - This
+  would trade queens, but it''s generally not the best approach in the opening when
+  you have a slight advantage\n2. **Bf4** - Develops a piece, controls central squares\n3.
+  **Bg5** - Pins the knight to the queen, a thematic move\n4. **Be3** - Solid development\n5.
+  **Be2** - Prepares castling\n6. **Qd4** - Centralizes the queen, but might be premature\n...'
+request_time: '2025-11-15T03:43:30.042Z'
+response_preview: '{"parsed_move": "Bg5", "is_valid": true}'
+state: OK
+trace_id: tr-15f48f5dc4f6dc16f03c67bfe7c3763e
+trace_location:
+  mlflow_experiment:
+    experiment_id: '0'
+  type: MLFLOW_EXPERIMENT

@@ -43,7 +43,7 @@ const promptSvg = <svg
     <path d="m4 17 6-6-6-6" />
 </svg>;
 
-export default function GroupedAnalysisSlide({ comment }: { comment: IGroupedAnalysisComment }) {
+export default function GroupedAnalysisSlide({ comment, flipped = false }: { comment: IGroupedAnalysisComment; flipped?: boolean }) {
     if (!comment) {
         return null;
     }
@@ -89,7 +89,7 @@ export default function GroupedAnalysisSlide({ comment }: { comment: IGroupedAna
             </h3>
 
             {/* Container for White, Black, and Analyst comments, arranged horizontally on medium screens and up */}
-            <div className="flex flex-col md:flex-row md:space-x-3 space-y-3 md:space-y-0">
+            <div className={`flex flex-col md:space-x-3 space-y-3 md:space-y-0 ${flipped ? 'md:flex-row-reverse' : 'md:flex-row'}`}>
                 {/* White's Comment Block */}
                 {whiteComment && (
                     <div className="mb-2 p-3 border rounded bg-white flex-1 shadow"> {/* flex-1 allows it to grow */}

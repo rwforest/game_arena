@@ -318,12 +318,16 @@ const ArenaPage = () => {
                       Model / Endpoint
                       {loadingEndpoints && <span className="text-xs ml-2">(loading...)</span>}
                     </label>
-                    {whitePlayer.provider === 'databricks' && availableEndpoints.length > 0 ? (
+                    {whitePlayer.provider === 'databricks' ? (
                       <select
                         value={whitePlayer.model_name}
                         onChange={(e) => setWhitePlayer({ ...whitePlayer, model_name: e.target.value })}
                         className="w-full bg-slate-700 border border-slate-500 rounded px-3 py-2"
+                        disabled={loadingEndpoints}
                       >
+                        {availableEndpoints.length === 0 && !loadingEndpoints && (
+                          <option value="">No endpoints found - check DATABRICKS_TOKEN in .env</option>
+                        )}
                         {availableEndpoints.map(endpoint => (
                           <option key={endpoint.name} value={endpoint.name}>
                             {endpoint.name}
@@ -367,12 +371,16 @@ const ArenaPage = () => {
                       Model / Endpoint
                       {loadingEndpoints && <span className="text-xs ml-2">(loading...)</span>}
                     </label>
-                    {blackPlayer.provider === 'databricks' && availableEndpoints.length > 0 ? (
+                    {blackPlayer.provider === 'databricks' ? (
                       <select
                         value={blackPlayer.model_name}
                         onChange={(e) => setBlackPlayer({ ...blackPlayer, model_name: e.target.value })}
                         className="w-full bg-slate-700 border border-slate-500 rounded px-3 py-2"
+                        disabled={loadingEndpoints}
                       >
+                        {availableEndpoints.length === 0 && !loadingEndpoints && (
+                          <option value="">No endpoints found - check DATABRICKS_TOKEN in .env</option>
+                        )}
                         {availableEndpoints.map(endpoint => (
                           <option key={endpoint.name} value={endpoint.name}>
                             {endpoint.name}

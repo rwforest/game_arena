@@ -1,0 +1,17 @@
+execution_duration_ms: 1
+request_preview: '{"state": "r1bqkbnr/pp1ppppp/2n5/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R w
+  KQkq - 2 3"}'
+request_time: '2025-11-15T03:41:46.905Z'
+response_preview: '{"prompt_text": "Let''s play chess. The current game state in Forsyth-Edwards
+  Notation (FEN) notation is:\nr1bqkbnr/pp1ppppp/2n5/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R
+  w KQkq - 2 3\nThe moves played so far are:\n1. e4 c5 2. Nf3 Nc6 3.\nYou are playing
+  as player White.\nIt is now your turn. Play your strongest move. The move MUST be
+  legal. Reason step by step to come up with your move, then output your final answer
+  in the format \"Final Answer: X\" where X is your chosen move in standard algebraic
+  notation (SAN)."}'
+state: OK
+trace_id: tr-1b118711ee6ec7c00d662d2613e1379b
+trace_location:
+  mlflow_experiment:
+    experiment_id: '0'
+  type: MLFLOW_EXPERIMENT

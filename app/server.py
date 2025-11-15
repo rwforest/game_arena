@@ -935,8 +935,9 @@ async def start_streaming_arena_game(req: ArenaGameRequest):
 
                 move_number += 1
                 current_player = state.current_player()
-                player_name = "white" if current_player == 0 else "black"
-                model = model_white if current_player == 0 else model_black
+                # PySpiel chess: player 0 is Black, player 1 is White
+                player_name = "black" if current_player == 0 else "white"
+                model = model_black if current_player == 0 else model_white
 
                 # Send thinking notification
                 yield f"data: {json.dumps({'type': 'thinking', 'player': player_name, 'move_number': move_number})}\n\n"

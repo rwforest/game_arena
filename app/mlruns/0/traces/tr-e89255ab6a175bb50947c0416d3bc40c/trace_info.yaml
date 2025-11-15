@@ -1,0 +1,21 @@
+execution_duration_ms: 7
+request_preview: '{"text_to_parse": "I''ll analyze this position step by step.\n\n**Current
+  Position Analysis:**\n- Material is equal\n- Black has doubled c-pawns (c6 and c7)\n-
+  My bishop is actively placed on g5, pinning the f6 knight to the queen\n- Black''s
+  king is still in the center\n- Black has developed Be7 and Nf6\n\n**Key Features:**\n1.
+  The Nf6 is pinned by my Bg5\n2. Black''s king hasn''t castled yet\n3. I have a lead
+  in development with potential to increase pressure\n\n**Candidate Moves:**\n1. **Qd4**
+  - Centralizes the queen, attacks the pinned knight, and puts pressure on the kingside\n2.
+  **Qd2** - Prepares to castle queenside and maintains pressure\n3. **Bxf6** - Exchanges
+  the bishop for the knight, damaging Black''s pawn structure\n4. **Qf3** - Attacks
+  the pinned knight and prepares potential threats\n\n**Detailed Analysis:**\n\n**Qd4**:
+  This move is very strong because:\n- It attacks the pinned Nf6 (which can''t move
+  due to the pin)\n- It centralizes the queen on an excellent square\n- It ...'
+request_time: '2025-11-15T03:43:53.457Z'
+response_preview: '{"parsed_move": "Qd4", "is_valid": true}'
+state: OK
+trace_id: tr-e89255ab6a175bb50947c0416d3bc40c
+trace_location:
+  mlflow_experiment:
+    experiment_id: '0'
+  type: MLFLOW_EXPERIMENT
