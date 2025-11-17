@@ -28,3 +28,14 @@ poetry.lock
 docs/_build
 docs/api
 .env
+
+# MLflow
+mlruns/
+mlartifacts/
+*.mlflow
+mlflow-traces/
+.mlflow/
+app/mlruns/
+app/mlartifacts/
+app/mlflow-traces/
+app/.mlflow/
