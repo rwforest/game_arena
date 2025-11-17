@@ -1,0 +1,15 @@
+execution_duration_ms: 1
+request_preview: '{"text_to_parse": "We have starting position. White to move. Strongest
+  move? In opening, best is 1.e4 or 1.d4 or 1.Nf3 or 1.c4. Typically 1.e4 is considered
+  strong. Let''s reason: Starting position, all pieces. The best move is 1.e4 (king''s
+  pawn two squares). That''s standard. Could also be 1.d4. Both are fine. Choose 1.e4.
+  SAN: e4. No capture, no check. So \"e4\". Output final answer.\nFinal Answer: e4",
+  "state": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"}'
+request_time: '2025-11-16T09:07:52.791Z'
+response_preview: '{"parsed_move": "e4", "is_valid": true}'
+state: OK
+trace_id: tr-a84910d270a11cef5c8b1d29fac041fc
+trace_location:
+  mlflow_experiment:
+    experiment_id: '0'
+  type: MLFLOW_EXPERIMENT

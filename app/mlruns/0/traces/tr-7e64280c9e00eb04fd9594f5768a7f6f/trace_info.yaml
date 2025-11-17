@@ -1,0 +1,19 @@
+execution_duration_ms: 3
+request_preview: '{"text_to_parse": "We have a chess position after moves: 1.e4 e5
+  2. It''s White to move on move 2 (i.e., after 1.e4 e5). The FEN: rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR
+  w KQkq - 0 2\n\nLet''s decode: Starting position after 1.e4 e5. So board: White
+  pieces on usual squares except pawn moved from e2 to e4. Black pawn from e7 to e5.
+  No other moves.\n\nWhite to move. What is the strongest move? Typically 2.Nf3 is
+  the main line, attacking the e5 pawn and developing. Also 2.d4 is the Center Game,
+  but less common. 2.Nf3 is best.\n\nCheck if any other move is stronger? 2.Nf3 attacks
+  e5 and prepares castling. So answer: Nf3. In SAN, it''s \"Nf3\". No capture, no
+  check. So final answer.\n\n\nFinal Answer: Nf3", "state": "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR
+  w KQkq - 0 2"}'
+request_time: '2025-11-15T09:47:51.229Z'
+response_preview: '{"parsed_move": "Nf3", "is_valid": true}'
+state: OK
+trace_id: tr-7e64280c9e00eb04fd9594f5768a7f6f
+trace_location:
+  mlflow_experiment:
+    experiment_id: '0'
+  type: MLFLOW_EXPERIMENT

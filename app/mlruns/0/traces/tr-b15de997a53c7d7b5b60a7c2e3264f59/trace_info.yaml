@@ -1,0 +1,22 @@
+execution_duration_ms: 3
+request_preview: '{"text_to_parse": "To determine the strongest move, let''s analyze
+  the current position:\n\n1. **Control of the Center**: The center of the board is
+  crucial in chess. Currently, both White and Black have pawns in the center, but
+  White has a slight advantage with the pawn on e4, which controls more central space.
+  The move ...e5 by Black challenges this control but also slightly weakens the d5
+  square.\n\n2. **Piece Development**: Both sides have developed some pieces. White
+  has developed the knights and the bishop on c3 and e3, respectively. Black has also
+  developed the knights. The next step for White should involve further development,
+  possibly of the queenside pieces or utilizing the already developed pieces more
+  effectively.\n\n3. **Pawn Structure**: The pawn structure is somewhat open, which
+  could favor the side that develops their pieces more efficiently and controls key
+  squares. The exchange on c5 has led to a somewhat asymmetrical pawn structure, which
+  might offer opportunities...'
+request_time: '2025-11-16T08:41:20.423Z'
+response_preview: '{"parsed_move": "Qe2", "is_valid": true}'
+state: OK
+trace_id: tr-b15de997a53c7d7b5b60a7c2e3264f59
+trace_location:
+  mlflow_experiment:
+    experiment_id: '0'
+  type: MLFLOW_EXPERIMENT

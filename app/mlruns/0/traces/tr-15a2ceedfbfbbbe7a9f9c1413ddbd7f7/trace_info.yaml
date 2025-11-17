@@ -1,0 +1,21 @@
+execution_duration_ms: 1
+request_preview: '{"text_to_parse": "We have a chess position after moves: 1.e4 e5
+  2.Nf3 Nc6 3.Bb5 a6 4. It''s White to move. The FEN given: r1bqkbnr/1ppp1ppp/p1n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R
+  w KQkq - 0 4\n\nLet''s decode board: Rank8: r . b q k b n r? Wait \"r1bqkbnr\":
+  squares a8 rook black, b8 empty, c8 bishop, d8 queen, e8 king, f8 bishop, g8 knight,
+  h8 rook.\n\nRank7: \"1ppp1ppp\": a7 empty, b7 pawn, c7 pawn, d7 pawn, e7 empty,
+  f7 pawn, g7 pawn, h7 pawn.\n\nRank6: \"p1n5\": a6 pawn, b6 empty, c6 knight, d6
+  empty, e6 empty, f6 empty, g6 empty, h6 empty.\n\nRank5: \"1B2p3\": a5 empty, b5
+  Bishop (white), c5 empty, d5 empty, e5 pawn (black), f5 empty, g5 empty, h5 empty.\n\nRank4:
+  \"4P3\": a4 empty, b4 empty, c4 empty, d4 empty, e4 pawn white, f4 empty, g4 empty,
+  h4 empty.\n\nRank3: \"5N2\": a3 empty, b3 empty, c3 empty, d3 empty, e3 empty, f3
+  Knight white, g3 empty, h3 empty.\n\nRank2: \"PPPP1PPP\": a2 pawn, b2 pawn, c2 pawn,
+  d2 pawn, e2 empty, f2 pawn, g2 pawn, h2 pawn.\n\nRank1: \"RNBQK2R\": a1 ...'
+request_time: '2025-11-15T09:48:08.511Z'
+response_preview: '{"parsed_move": null, "is_valid": false}'
+state: OK
+trace_id: tr-15a2ceedfbfbbbe7a9f9c1413ddbd7f7
+trace_location:
+  mlflow_experiment:
+    experiment_id: '0'
+  type: MLFLOW_EXPERIMENT

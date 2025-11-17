@@ -1,0 +1,22 @@
+execution_duration_ms: 1
+request_preview: '{"text_to_parse": "To determine the strongest move, let''s analyze
+  the starting position of the chess game given in Forsyth-Edwards Notation (FEN)
+  notation: `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`. This is the
+  standard starting position of a chess game.\n\nGiven that it''s the first move and
+  we are playing as White, the goal is to control the center of the board, develop
+  pieces, and prepare for the rest of the game. The best first moves in chess typically
+  involve moving pawns in front of the pieces to allow them to develop and control
+  key central squares.\n\nThe central pawns (d-pawn and e-pawn) are the most important
+  to move first because they allow for the quickest development of other pieces. Moving
+  the e-pawn or d-pawn two spaces forward are popular choices for the first move as
+  they open up lines for the pieces behind them to develop.\n\nBetween e4 and d4,
+  both are strong moves, but e4 is slightly more popular and considered by many to
+  be the best first move. I...'
+request_time: '2025-11-16T08:39:50.766Z'
+response_preview: '{"parsed_move": "e4", "is_valid": true}'
+state: OK
+trace_id: tr-d1ec97f29bc3898b27397a10c3045e98
+trace_location:
+  mlflow_experiment:
+    experiment_id: '0'
+  type: MLFLOW_EXPERIMENT

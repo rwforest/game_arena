@@ -1,0 +1,20 @@
+execution_duration_ms: 1
+request_preview: '{"text_to_parse": "We need to play chess from starting position.
+  It''s White to move. We need to choose the strongest move. In chess, the best opening
+  move is usually 1.e4 or 1.d4. But we need to consider \"strongest move\" maybe meaning
+  best according to engine. Usually 1.e4 is considered best. So we should output \"e4\"
+  in SAN: \"e4\". But we need to output \"Final Answer: e4\". But we must ensure SAN:
+  \"e4\". Yes.\n\nBut we should consider if there is any better move like 1.e4 or
+  1.d4. Usually 1.e4 is considered best. So final answer: \"e4\".\n\nBut we need to
+  reason step by step. Let''s produce reasoning: Starting position, white to move.
+  Evaluate options: e4 opens lines, controls center, develops bishop and queen. d4
+  also good. But engine evaluation: 1.e4 is best. So final answer: e4.\nFinal Answer:
+  e4", "state": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"}'
+request_time: '2025-11-16T17:51:46.275Z'
+response_preview: '{"parsed_move": "e4", "is_valid": true}'
+state: OK
+trace_id: tr-0d2dc7504f1df830e7dbf15b7b09005d
+trace_location:
+  mlflow_experiment:
+    experiment_id: '0'
+  type: MLFLOW_EXPERIMENT

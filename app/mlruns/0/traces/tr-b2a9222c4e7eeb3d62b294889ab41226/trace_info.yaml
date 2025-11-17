@@ -1,0 +1,22 @@
+execution_duration_ms: 1
+request_preview: '{"text_to_parse": "To determine the strongest move as White, let''s
+  analyze the given position:\n\n1. The current position is given in FEN notation
+  as: `r1bqkbnr/pppp1ppp/2n5/8/3pP3/5N2/PPP2PPP/RNBQKB1R w KQkq - 0 4`\n2. The moves
+  played so far are: `1. e4 e5 2. Nf3 Nc6 3. d4 exd4`\n\nLet''s break down the position:\n\n-
+  The FEN notation indicates it''s White''s turn (`w`), and White has the right to
+  castle kingside and queenside (`KQ`), while Black has the same rights (`kq`). The
+  `-` indicates there''s no en passant square currently.\n- The position on the board
+  is: `r1bqkbnr/pppp1ppp/2n5/8/3pP3/5N2/PPP2PPP/RNBQKB1R`\n  - Black''s pieces: Rook,
+  Bishop, Queen, King, Bishop, Knight, Rook on the 8th rank, and pawns on the 7th
+  rank except for the d-pawn which has moved to d4 (captured by White''s d-pawn).\n  -
+  White''s pieces: Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook on the
+  1st rank, and pawns on the 2nd rank except for the d-pawn and e-pawn, with the e-pawn
+  having moved to e4.\...'
+request_time: '2025-11-17T03:06:35.408Z'
+response_preview: '{"parsed_move": "Nxd4", "is_valid": true}'
+state: OK
+trace_id: tr-b2a9222c4e7eeb3d62b294889ab41226
+trace_location:
+  mlflow_experiment:
+    experiment_id: '0'
+  type: MLFLOW_EXPERIMENT

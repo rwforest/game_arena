@@ -1,0 +1,29 @@
+execution_duration_ms: 1943
+request_preview: '{"model": "<game_arena.harness.databricks_sdk.DatabricksModel object
+  at 0x115cf74d0>", "prompt_text": "Let''s play chess. The current game state in Forsyth-Edwards
+  Notation (FEN) notation is:\nrnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq
+  - 0 1\nThe moves played so far are:\n1.\nYou are playing as player White.\nIt is
+  now your turn. Play your strongest move. The move MUST be legal. Reason step by
+  step to come up with your move, then output your final answer in the format \"Final
+  Answer: X\" where X is your chosen move in standard algebraic notation (SAN).",
+  "player": "white"}'
+request_time: '2025-11-16T17:51:44.326Z'
+response_preview: '{"text": "We need to play chess from starting position. It''s White
+  to move. We need to choose the strongest move. In chess, the best opening move is
+  usually 1.e4 or 1.d4. But we need to consider \"strongest move\" maybe meaning best
+  according to engine. Usually 1.e4 is considered best. So we should output \"e4\"
+  in SAN: \"e4\". But we need to output \"Final Answer: e4\". But we must ensure SAN:
+  \"e4\". Yes.\n\nBut we should consider if there is any better move like 1.e4 or
+  1.d4. Usually 1.e4 is considered best. So final answer: \"e4\".\n\nBut we need to
+  reason step by step. Let''s produce reasoning: Starting position, white to move.
+  Evaluate options: e4 opens lines, controls center, develops bishop and queen. d4
+  also good. But engine evaluation: 1.e4 is best. So final answer: e4.\nFinal Answer:
+  e4", "usage": {"prompt_tokens": 221, "generation_tokens": 218, "reasoning_tokens":
+  null}, "request_for_logging": {"model": "databricks-gpt-oss-20b", "messages": [{"role":
+  "user", "content": "L...'
+state: OK
+trace_id: tr-4dd4acde39563f16c6a83f97f1d7e0b7
+trace_location:
+  mlflow_experiment:
+    experiment_id: '0'
+  type: MLFLOW_EXPERIMENT

@@ -1,0 +1,21 @@
+execution_duration_ms: 2
+request_preview: '{"text_to_parse": "We have a chess position after moves: 1.e4 c5
+  2.Nf3 d6 3.d4 cxd4 4. (white to move). The FEN given: rnbqkbnr/pp2pppp/3p4/8/3pP3/5N2/PPP2PPP/RNBQKB1R
+  w KQkq - 0 4\n\nLet''s decode board: Rank8: r n b q k b n r\nRank7: p p . . p p
+  p p (since \"pp2pppp\": p p 2 empty squares then p p p p)\nRank6: 3p4: three empty,
+  p, four empty => squares: a6 empty, b6 empty, c6 empty, d6 pawn, e6 empty, f6 empty,
+  g6 empty, h6 empty.\nRank5: 8: all empty.\nRank4: 3pP3: three empty, p, P, three
+  empty. So a4 empty, b4 empty, c4 empty, d4 pawn (black), e4 pawn (white), f4 empty,
+  g4 empty, h4 empty.\nRank3: 5N2: five empty, N, two empty. So a3 empty,b3 empty,c3
+  empty,d3 empty,e3 empty, f3 white knight, g3 empty, h3 empty.\nRank2: PPP2PPP: P
+  P P 2 empty P P P. So a2 pawn, b2 pawn, c2 pawn, d2 empty, e2 empty, f2 pawn, g2
+  pawn, h2 pawn.\nRank1: RNBQKB1R: R N B Q K B 1 empty? Actually \"RNBQKB1R\": squares
+  a1 rook, b1 knight, c1 bishop, d1 queen, e1 king, f1 bishop, g1 empty, h1 rook.\n\nSid...'
+request_time: '2025-11-16T09:08:41.669Z'
+response_preview: '{"parsed_move": null, "is_valid": false}'
+state: OK
+trace_id: tr-f91a2c3a9599ff10b71b187d5f715d6a
+trace_location:
+  mlflow_experiment:
+    experiment_id: '0'
+  type: MLFLOW_EXPERIMENT

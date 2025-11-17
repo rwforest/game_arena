@@ -1,0 +1,22 @@
+execution_duration_ms: 4
+request_preview: '{"text_to_parse": "To determine the strongest move, let''s analyze
+  the current position:\n\n1. **Control of the Center**: The center of the board is
+  relatively open, with pawns on e4 and e5. This suggests that control of the center
+  is still a significant factor. My pawn on e4 and the opponent''s pawn on e5 are
+  both well-supported.\n\n2. **Piece Development**: Most pieces are still in their
+  starting positions or have just begun to develop. The queens, knights, and bishops
+  are starting to come into play, but there''s still room for development, especially
+  for the rooks and the queenside pieces.\n\n3. **Pawn Structure**: The pawn structure
+  is somewhat asymmetrical, with my pawns on the queenside being more advanced than
+  those on the kingside. The opponent has a similar structure but with more pawns
+  on the kingside.\n\n4. **Threats and Opportunities**: The opponent''s last move
+  was ...e5, challenging my central control and preparing to develop other pieces.
+  There''s no immediate threat, but ...'
+request_time: '2025-11-16T08:41:35.547Z'
+response_preview: '{"parsed_move": null, "is_valid": false}'
+state: OK
+trace_id: tr-f2d234fe30d741346b7c09f69f766f64
+trace_location:
+  mlflow_experiment:
+    experiment_id: '0'
+  type: MLFLOW_EXPERIMENT

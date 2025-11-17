@@ -1,0 +1,29 @@
+execution_duration_ms: 1276
+request_preview: '{"model": "<game_arena.harness.databricks_sdk.DatabricksModel object
+  at 0x1172d3230>", "prompt_text": "Let''s play chess. The current game state in Forsyth-Edwards
+  Notation (FEN) notation is:\nrnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq
+  - 0 1\nThe moves played so far are:\n1.\nYou are playing as player White.\nIt is
+  now your turn. Play your strongest move. The move MUST be legal. Reason step by
+  step to come up with your move, then output your final answer in the format \"Final
+  Answer: X\" where X is your chosen move in standard algebraic notation (SAN).",
+  "player": "white"}'
+request_time: '2025-11-16T09:07:51.509Z'
+response_preview: '{"text": "We have starting position. White to move. Strongest move?
+  In opening, best is 1.e4 or 1.d4 or 1.Nf3 or 1.c4. Typically 1.e4 is considered
+  strong. Let''s reason: Starting position, all pieces. The best move is 1.e4 (king''s
+  pawn two squares). That''s standard. Could also be 1.d4. Both are fine. Choose 1.e4.
+  SAN: e4. No capture, no check. So \"e4\". Output final answer.\nFinal Answer: e4",
+  "usage": {"prompt_tokens": 221, "generation_tokens": 128, "reasoning_tokens": null},
+  "request_for_logging": {"model": "databricks-gpt-oss-120b", "messages": [{"role":
+  "user", "content": "Let''s play chess. The current game state in Forsyth-Edwards
+  Notation (FEN) notation is:\nrnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq
+  - 0 1\nThe moves played so far are:\n1.\nYou are playing as player White.\nIt is
+  now your turn. Play your strongest move. The move MUST be legal. Reason step by
+  step to come up with your move, then output your final answer in the format \"Final
+  Answer: X\" where X is your...'
+state: OK
+trace_id: tr-1d2a9b4c35bd5deb9cd745c251bd2cf6
+trace_location:
+  mlflow_experiment:
+    experiment_id: '0'
+  type: MLFLOW_EXPERIMENT

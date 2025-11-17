@@ -1,0 +1,29 @@
+execution_duration_ms: 5932
+request_preview: '{"model": "<game_arena.harness.databricks_sdk.DatabricksModel object
+  at 0x117bef8c0>", "prompt_text": "Let''s play chess. The current game state in Forsyth-Edwards
+  Notation (FEN) notation is:\nr1bqkbnr/pp1ppppp/2n5/8/3pP3/5N2/PPP2PPP/RNBQKB1R w
+  KQkq - 0 4\nThe moves played so far are:\n1. e4 c5 2. Nf3 Nc6 3. d4 cxd4 4.\nYou
+  are playing as player White.\nIt is now your turn. Play your strongest move. The
+  move MUST be legal. Reason step by step to come up with your move, then output your
+  final answer in the format \"Final Answer: X\" where X is your chosen move in standard
+  algebraic notation (SAN).", "player": "white"}'
+request_time: '2025-11-16T08:40:25.338Z'
+response_preview: '{"text": "To determine the strongest move, let''s analyze the position
+  given in the FEN notation: `r1bqkbnr/pp1ppppp/2n5/8/3pP3/5N2/PPP2PPP/RNBQKB1R w
+  KQkq - 0 4`. This translates to the moves `1. e4 c5 2. Nf3 Nc6 3. d4 cxd4 4.`.\n\nGiven
+  the current position, we need to consider the principles of chess strategy, such
+  as controlling the center, developing pieces, and protecting pawns. The move `d4`
+  aims to control the center and create space for the pieces to develop. The response
+  `cxd4` opens up the d-file for Black''s potential use by the rooks later in the
+  game and also slightly weakens the d5 square, which could become a strategic spot
+  for White to influence.\n\nSince the last move was `cxd4`, we need to decide how
+  to recapture the pawn. The options are to recapture with a piece or to play a different
+  move, developing another piece or controlling key squares.\n\nRecapturing with `4.
+  Nxd4` is a common move in such positions, as it develops the knight further and
+  puts it on a strong...'
+state: OK
+trace_id: tr-6435b5ce633f00b79d23eb82fb7c9f46
+trace_location:
+  mlflow_experiment:
+    experiment_id: '0'
+  type: MLFLOW_EXPERIMENT

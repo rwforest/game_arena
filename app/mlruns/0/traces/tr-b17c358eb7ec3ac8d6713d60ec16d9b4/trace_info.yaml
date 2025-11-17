@@ -1,0 +1,29 @@
+execution_duration_ms: 176723
+request_preview: '{"model": "<game_arena.harness.databricks_sdk.DatabricksModel object
+  at 0x11bbe7ed0>", "prompt_text": "Let''s play chess. The current game state in Forsyth-Edwards
+  Notation (FEN) notation is:\nrnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq
+  - 0 1\nThe moves played so far are:\n1. e4\nYou are playing as player Black.\nIt
+  is now your turn. Play your strongest move. The move MUST be legal. Reason step
+  by step to come up with your move, then output your final answer in the format \"Final
+  Answer: X\" where X is your chosen move in standard algebraic notation (SAN).",
+  "player": "black"}'
+request_time: '2025-11-15T09:44:08.686Z'
+response_preview: '{"text": "To determine the strongest move for Black in response
+  to 1.e4, let''s analyze the position and the principles of chess strategy.\n\n1.
+  **Control of the Center**: The move 1.e4 by White aims to control the center of
+  the board, which is a fundamental principle in chess. By playing e4, White opens
+  up lines for their pieces to develop and prepares to develop other pieces.\n\n2.
+  **Response to e4**: For Black, the goal is to challenge White''s control of the
+  center and prepare for the development of their pieces. There are several common
+  responses to 1.e4, including e5, e6, c5, c6, and d6, among others. Each of these
+  moves has its own strategic and tactical implications.\n\n3. **Popular Choices**:\n   -
+  **e5**: This move directly challenges White''s central control and opens up the
+  center for Black''s pieces to develop. It''s a very common response and leads to
+  open games.\n   - **e6**: The French Defense, which starts with 1.e4 e6, is a solid
+  choice that prepares to develop other pi...'
+state: OK
+trace_id: tr-b17c358eb7ec3ac8d6713d60ec16d9b4
+trace_location:
+  mlflow_experiment:
+    experiment_id: '0'
+  type: MLFLOW_EXPERIMENT

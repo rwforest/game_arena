@@ -1,0 +1,28 @@
+execution_duration_ms: 5073
+request_preview: '{"model": "<game_arena.harness.databricks_sdk.DatabricksModel object
+  at 0x117bef8c0>", "prompt_text": "Let''s play chess. The current game state in Forsyth-Edwards
+  Notation (FEN) notation is:\nrnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq
+  - 0 1\nThe moves played so far are:\n1.\nYou are playing as player White.\nIt is
+  now your turn. Play your strongest move. The move MUST be legal. Reason step by
+  step to come up with your move, then output your final answer in the format \"Final
+  Answer: X\" where X is your chosen move in standard algebraic notation (SAN).",
+  "player": "white"}'
+request_time: '2025-11-16T08:39:45.687Z'
+response_preview: '{"text": "To determine the strongest move, let''s analyze the starting
+  position of the chess game given in Forsyth-Edwards Notation (FEN) notation: `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR
+  w KQkq - 0 1`. This is the standard starting position of a chess game.\n\nGiven
+  that it''s the first move and we are playing as White, the goal is to control the
+  center of the board, develop pieces, and prepare for the rest of the game. The best
+  first moves in chess typically involve moving pawns in front of the pieces to allow
+  them to develop and control key central squares.\n\nThe central pawns (d-pawn and
+  e-pawn) are the most important to move first because they allow for the quickest
+  development of other pieces. Moving the e-pawn or d-pawn two spaces forward are
+  popular choices for the first move as they open up lines for the pieces behind them
+  to develop.\n\nBetween e4 and d4, both are strong moves, but e4 is slightly more
+  popular and considered by many to be the best first move. It opens u...'
+state: OK
+trace_id: tr-401a3769d6baa86323c2554d2a3ee14d
+trace_location:
+  mlflow_experiment:
+    experiment_id: '0'
+  type: MLFLOW_EXPERIMENT

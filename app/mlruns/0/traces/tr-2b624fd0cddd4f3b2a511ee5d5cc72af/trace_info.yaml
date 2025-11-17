@@ -1,0 +1,29 @@
+execution_duration_ms: 12374
+request_preview: '{"model": "<game_arena.harness.databricks_sdk.DatabricksModel object
+  at 0x119b19810>", "prompt_text": "Let''s play chess. The current game state in Forsyth-Edwards
+  Notation (FEN) notation is:\nrnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq
+  - 0 1\nThe moves played so far are:\n1. e4\nYou are playing as player Black.\nIt
+  is now your turn. Play your strongest move. The move MUST be legal. Reason step
+  by step to come up with your move, then output your final answer in the format \"Final
+  Answer: X\" where X is your chosen move in standard algebraic notation (SAN).",
+  "player": "black"}'
+request_time: '2025-11-16T09:07:52.865Z'
+response_preview: '{"text": "I need to analyze the position after White''s 1. e4.\n\nCurrent
+  position: White has played the most popular opening move, advancing the king''s
+  pawn two squares. I''m playing as Black and need to respond.\n\nLet me consider
+  the main options:\n\n1. **1...e5** - The classical response, leading to open games
+  like the Italian, Spanish (Ruy Lopez), or Scotch. This is symmetrical and fights
+  for the center.\n\n2. **1...c5** - The Sicilian Defense, the most popular and aggressive
+  response at the highest levels. It fights for central control asymmetrically and
+  gives Black good winning chances.\n\n3. **1...e6** - The French Defense, solid but
+  somewhat passive, leading to closed positions.\n\n4. **1...c6** - The Caro-Kann
+  Defense, solid and reliable, similar to the French but with different pawn structures.\n\n5.
+  **1...d5** - The Scandinavian Defense, immediately challenging the e4 pawn but allowing
+  White to gain time after 2. exd5.\n\n6. **1...Nf6** - Alekhine''s Defense, hypermodern
+  ap...'
+state: OK
+trace_id: tr-2b624fd0cddd4f3b2a511ee5d5cc72af
+trace_location:
+  mlflow_experiment:
+    experiment_id: '0'
+  type: MLFLOW_EXPERIMENT
